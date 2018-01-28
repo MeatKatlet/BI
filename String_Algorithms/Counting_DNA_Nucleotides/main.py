@@ -1,9 +1,7 @@
-#TODO бинарным поиском посчитать все вхождения  'A', 'C', 'G', and 'T' occur in ss.
-#TODO алгоритмами поиска подстроки в строке(Кнутта-Морриса-Пратта, с использованием хеша(забыл имена людей), Боера-мура(это тот что со смещением))
 
-#TODO использовать итераторы для экономии памяти!
 
 #TODO тесты на свой код, использовать фреймворк для этого!
+#профилировщик для кода найти, чтобы определять что работает быстро а что нет
 
 #надо все задачи делать с расчетом на большие данные!,(большие файлы) не помещающиеся в оперативную память
 
@@ -14,8 +12,14 @@
 
 from common.files import FileProcessing
 from String_Algorithms.Counting_DNA_Nucleotides import DNAFileProcessor
+from String_Algorithms.Counting_DNA_Nucleotides import DataProvider
+from String_Algorithms.Counting_DNA_Nucleotides import LogicProvider
 
-FileProcessing("text.txt",DNAFileProcessor)
+dp = DataProvider
+lp = LogicProvider
+fp = DNAFileProcessor(dp,lp)
+
+FileProcessing("text.txt",fp)# построчно читает большой файл, без загрузки всего файла в память todo проверить это на большом файле
 
 
 
