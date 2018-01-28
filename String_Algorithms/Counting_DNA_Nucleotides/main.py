@@ -9,6 +9,18 @@
 
 #распаралеливание кода?
 
+#TODO написать универсальный класс для чтения больших файлов , чтобы использовать его в любых задачах(сделать это через dependency injection)
+#будет внедряться нужный класс конфигурации и внем будет конкретная логика по работе со строкой
+
+from common.files import FileProcessing
+from String_Algorithms.Counting_DNA_Nucleotides import DNAFileProcessor
+
+FileProcessing("text.txt",DNAFileProcessor)
+
+
+
+
+
 
 
 
