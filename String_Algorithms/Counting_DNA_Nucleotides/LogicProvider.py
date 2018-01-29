@@ -1,26 +1,27 @@
-class LogicProvider:
+class LinesLogicProvider:
+
+    def __init__(self):
+
+        self.char_total_counter = {"A" : 0, "C": 0, "G": 0, "T" : 0}
+
+
+    def print_result(self):
+        print(" ".join(self.char_total_counter))
 
     def logic(self,line):
         """
-        A string is simply an ordered collection of symbols selected from some alphabet and formed into a word; the length of a string is the number of symbols that it contains.
-
-An example of a length 21 DNA string (whose alphabet contains the symbols 'A', 'C', 'G', and 'T') is "ATGCTTCAGAAAGGTCTTACG."
-
-Given: A DNA string ss of length at most 1000 nt.
-
-Return: Four integers (separated by spaces) counting the respective number of times that the symbols 'A', 'C', 'G', and 'T' occur in ss.
-
-Sample Dataset
-AGCTTTTCATTCTGACTGCAACGGGCAATATGTCTCTGTGTGGATTAAAAAAAGAGTGTCTGATAGCAGC
-Sample Output
-20 12 17 21
-
-все сортировки работают не меньше чем за n*log n, поэтому быстрее чем за n никак!
+            все сортировки работают не меньше чем за n*log n, поэтому быстрее чем за n никак!
         """
 
-#TODO использовать итераторы для экономии памяти!
-#TODO для того чтобы считывать символы поштучно, занимая в памяти только оодин символ за раз надо делать это через генератор, в генераторе будет считывание посимвольно из строки(побайтова)
+        result = self.method1(line)
 
+        #для всего файла целиком считаем здесь
+        self.char_total_counter["A"] += result["A"]
+        self.char_total_counter["C"] += result["C"]
+        self.char_total_counter["G"] += result["G"]
+        self.char_total_counter["T"] += result["T"]
+
+        return " ".join(result)#только для строки
 
     def method1(self, line):
         #simple
@@ -33,16 +34,28 @@ Sample Output
         except:
             print("Символ не из алфавита ДНК!")
 
-        return " ".join(result)
+        #return " ".join(result)
+        return result
 
     def method2(self,line):
 
-        #распаралеливание строки на части!
-        #
+        #TODO распаралеливание строки на части! в памяти
+        #т.е. каждую строку в памяти паралельно!
 
         pass
 
 
+class CharsLogicProvider(LinesLogicProvider):
 
+    def __init__(self):
 
+        self.char_total_counter = {"A" : 0, "C": 0, "G": 0, "T" : 0}
+
+    def logic(self,char):
+
+        try:
+            self.char_total_counter[char] += 1
+
+        except:
+            print("Not correct symbol!")
 
