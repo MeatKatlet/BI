@@ -1,3 +1,6 @@
+from math import floor
+from multiprocessing import Pool
+
 class LinesLogicProvider:
 
     def __init__(self):
@@ -31,18 +34,43 @@ class LinesLogicProvider:
             for char in line:
                 result[char] += 1
 
-        except:
+            return result
+        except Exception as e:
             print("Символ не из алфавита ДНК!")
+            raise e
 
         #return " ".join(result)
-        return result
+
+
 
     def method2(self,line):
 
         #TODO распаралеливание строки на части! в памяти
         #т.е. каждую строку в памяти паралельно!
+        #middle = floor(len(line)/2);
 
-        pass
+        #простой вариант - делим строку пополам, на каждую часть будет worker
+        #или делим на несколько частей
+        #
+
+        #task1 = line[0:middle]
+        #task2 = line[middle:]
+
+        #Это увеличивает память, надо наверное посимвольно отправлять буквы в worker ы
+
+
+        if __name__ == '__main__':
+            p = Pool(2)
+            p.map(LinesLogicProvider.line_worker(), line) #здесь мы пока что только получаем статистику для 1 воркера
+
+        def line_worker(line):
+            self.method1(line)
+
+            #как передать очередь?
+            #как получить результат вычислений наружу
+            #TODO как получить результат вычислений наружу и передать его обратно для следующих вычислений?
+
+
 
 
 class CharsLogicProvider(LinesLogicProvider):
