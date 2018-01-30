@@ -1,5 +1,6 @@
 from math import floor
-from multiprocessing import Pool
+from multiprocessing import Pool, Lock, Array
+import multiprocessing as mp
 
 class LinesLogicProvider:
 
@@ -56,20 +57,47 @@ class LinesLogicProvider:
         #task1 = line[0:middle]
         #task2 = line[middle:]
 
-        #Это увеличивает память, надо наверное посимвольно отправлять буквы в worker ы
 
+        #согластно ответу на SO память расти не должна
 
         if __name__ == '__main__':
-            p = Pool(2)
-            p.map(LinesLogicProvider.line_worker(), line) #здесь мы пока что только получаем статистику для 1 воркера
+            a = mp.Array('i', 4)
+            self.counter_lock = Lock()
+            p = Pool(processes=2,initializer=self.init, initargs=(a))
+            p.map(self.line_worker, line,2) #здесь мы пока что только получаем статистику для 1 воркера
 
-        def line_worker(line):
-            self.method1(line)
+            p.close()
+            p.join()
 
-            #как передать очередь?
-            #как получить результат вычислений наружу
-            #TODO как получить результат вычислений наружу и передать его обратно для следующих вычислений?
+            dict = {"A" : a[0], "C": a[1], "G": a[2], "T" : a[3]}
 
+            return dict
+
+
+    def init(self, aa):
+        global a
+        a = aa
+
+
+    def line_worker(self, line):
+        result = self.method1(line)
+
+        with self.counter_lock:
+            a[0] += result["A"]
+            a[1] += result["C"]
+            a[2] += result["G"]
+            a[3] += result["T"]
+
+        # {"A" : 0, "C": 0, "G": 0, "T" : 0}
+
+            # пока вижу 2 пути для распаралеливания
+            # 1. каждый worker независимо производит свой результат, потом результаты суммиируются
+            # 2. каждый worker разделяет shared_memory
+            #   - manager(list, dict, и другие)
+            #   - Value/Array + lock т.к. операции например += не атомарны, но как говорят на SO быстрее работает
+
+            #написать все варианты для этого!
+            # как передавать shared_memory object в worker
 
 
 

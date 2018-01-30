@@ -1,5 +1,6 @@
 #класс - конкретная реализация логики чтения/записи в файл
 class DNAFileProcessor:
+
     def __init__(self,data_provider,logic_provider):
 
         self.data_provider = data_provider#класс - провайдер данных для записи
