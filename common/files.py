@@ -1,3 +1,4 @@
+
 class FileProcessing:
 
     def __init__(self, path,fp):
@@ -21,7 +22,7 @@ class FileProcessing:
 
     def write_to_file(self):
         try:
-            with open(self.file_path, 'w') as f:
+            with open(self.file_path, 'wt') as f:
                 self.concrete_fileprocessor.write_to_file(f)
 
         except OSError:
@@ -46,4 +47,4 @@ class FileProcessing_by_chars(FileProcessing):
                 print('No such file.')
 
 
-    #TODO распаралеливание чтения файла посимвольно?
+

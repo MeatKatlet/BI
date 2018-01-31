@@ -17,7 +17,7 @@ class LinesLogicProvider:
             все сортировки работают не меньше чем за n*log n, поэтому быстрее чем за n никак!
         """
 
-        result = self.method1(line)
+        result = self.simple_method(line)
 
         #для всего файла целиком считаем здесь
         self.char_total_counter["A"] += result["A"]
@@ -27,7 +27,7 @@ class LinesLogicProvider:
 
         return " ".join(result)#только для строки
 
-    def method1(self, line):
+    def simple_method(self, line):
         #simple
         result = {"A" : 0, "C": 0, "G": 0, "T" : 0}
 
@@ -44,35 +44,31 @@ class LinesLogicProvider:
 
 
 
-    def method2(self,line):
+class CharsLogicProvider(LinesLogicProvider):
 
-        #TODO распаралеливание строки на части! в памяти
-        #т.е. каждую строку в памяти паралельно!
-        #middle = floor(len(line)/2);
+    def __init__(self):
 
-        #простой вариант - делим строку пополам, на каждую часть будет worker
-        #или делим на несколько частей
-        #
+        self.char_total_counter = {"A" : 0, "C": 0, "G": 0, "T" : 0}
 
-        #task1 = line[0:middle]
-        #task2 = line[middle:]
+    def logic(self,char):
+
+        try:
+            self.char_total_counter[char] += 1
+
+        except:
+            print("Not correct symbol!")
 
 
-        #согластно ответу на SO память расти не должна
+class ParalellLogicProvider(LinesLogicProvider):
 
-        if __name__ == '__main__':
-            a = mp.Array('i', 4)
-            self.counter_lock = Lock()
-            p = Pool(processes=2,initializer=self.init, initargs=(a))
-            p.map(self.line_worker, line,2) #здесь мы пока что только получаем статистику для 1 воркера
+    def __init__(self):
 
-            p.close()
-            p.join()
+        self.char_total_counter = {"A" : 0, "C": 0, "G": 0, "T" : 0}
 
-            dict = {"A" : a[0], "C": a[1], "G": a[2], "T" : a[3]}
+    def logic(self,line):
+        self.parallell_method(line)
 
-            return dict
-
+        raise MyException# вообще это надо делать в тестах!
 
     def init(self, aa):
         global a
@@ -80,7 +76,7 @@ class LinesLogicProvider:
 
 
     def line_worker(self, line):
-        result = self.method1(line)
+        result = self.simple_method(line)
 
         with self.counter_lock:
             a[0] += result["A"]
@@ -100,18 +96,39 @@ class LinesLogicProvider:
             # как передавать shared_memory object в worker
 
 
+    def parallell_method(self, line):
+        # TODO распаралеливание строки на части! в памяти
+        # т.е. каждую строку в памяти паралельно!
+        # middle = floor(len(line)/2);
 
-class CharsLogicProvider(LinesLogicProvider):
+        # простой вариант - делим строку пополам, на каждую часть будет worker
+        # или делим на несколько частей
+        #
 
-    def __init__(self):
+        # task1 = line[0:middle]
+        # task2 = line[middle:]
 
-        self.char_total_counter = {"A" : 0, "C": 0, "G": 0, "T" : 0}
 
-    def logic(self,char):
+        # согластно ответу на SO память расти не должна
 
-        try:
-            self.char_total_counter[char] += 1
+        if __name__ == '__main__':
+            a = mp.Array('i', 4)
+            self.counter_lock = Lock()
+            p = Pool(processes=2, initializer=self.init, initargs=(a))
+            p.map(self.line_worker, line, 2)  # здесь мы пока что только получаем статистику для 1 воркера
 
-        except:
-            print("Not correct symbol!")
+            p.close()
+            p.join()
 
+            self.char_total_counter["A"] = a[0]
+            self.char_total_counter["C"] = a[1]
+            self.char_total_counter["G"] = a[2]
+            self.char_total_counter["T"] = a[3]
+
+            #dict = {"A": a[0], "C": a[1], "G": a[2], "T": a[3]}
+
+            #return dict
+
+
+class MyException(Exception):
+    pass
