@@ -69,5 +69,12 @@ for iv2, fs2 in gas[ HTSeq.GenomicInterval( "chr1", 150, 250, "." ) ].steps():
 #чтобы определить покрытие надо находить пересекающиеся риды по интервалам
 
 
+#matplotlib.pyplot.eventplot
+#errorbar - рисует несколько линий в одной fig и показывает размах данных через errorbar
+
+
+
+
+
 
 
