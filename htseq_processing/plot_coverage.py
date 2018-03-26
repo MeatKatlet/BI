@@ -66,8 +66,38 @@ for iv3, fs2 in gas[ HTSeq.GenomicInterval( "chr1", 210, 290, "." ) ].steps():
 
 
 """
-ffsdfsf
+1. sam file отсортирован по координате, там не обязательно могут идти риды в порядке возрастания координаты , иногда они могут идти и назад по координате
+
+2. будем считать только для точек в 10%(интервал) - сколько ридов пересекает каждый интервал
+
+нужна сумма всех экзонов для получения точек 10%
+получим точки в абсолютных координатах исходя из 10% интервала, запишем их в массив
+нам надо проверять пересекает ли рид эту точку и если да то +1, 
+10% интервалы будем получать просто не учитывая в расчете интроны(не включая их в расстояние)
+точки расчитаем 1 раз для каждого гена с учетом всех интронов, из координат ридов вычетать ничего не будем, а будем только искать пересечение(бинарным поиском, потом подумаем как можно ьулучшить) - хеш таблица?, фильтр блума?
+
+3. нужно иметь список границ экзонов в каждом гене или уметь получать его(по границам гена из списка екзонов, значит надо запоминать только границы гена)
+ген начало гена, конец гена, это сэкономит место в памяти
+ссылки в питон?
+
+4. приходит рид и по его координате надо найти экзон которому он принадлежит
+получаем ген из уже существующего кода
+получаем из массива с границами гена список интервалов с экзонами
+собираем из кусков cigar левый и правый рид 
+надо скоректировать левую границу начала левого рида (вычесть интроны)
+
+для большинства ридов 
 """
+
+def invert_strand(iv):
+    iv2 = iv.copy()
+    if iv2.strand == "+":
+        iv2.strand = "-"
+    elif iv2.strand == "-":
+        iv2.strand = "+"
+    else:
+        raise ValueError("Illegal strand")
+    return iv2
 
 ##################################################################################################################
 def count_reads_in_features(sam_filenames, gff_filename,
@@ -82,17 +112,9 @@ def count_reads_in_features(sam_filenames, gff_filename,
                             quiet, minaqual, samouts):
 
 
-"""
-def write_to_samout(r, assignment, samoutfile):
-        if samoutfile is None:
-            return
-        if not pe_mode:
-            r = (r,)
-        for read in r:
-            if read is not None:
-                samoutfile.write(read.original_sam_line.rstrip() +
-                                 "\tXF:Z:" + assignment + "\n")
-"""
+
+
+
     if samouts != "":
         if len(samouts) != len(sam_filenames):
             raise ValueError('Select the same number of SAM input and output files')
@@ -114,9 +136,11 @@ def write_to_samout(r, assignment, samoutfile):
     features = HTSeq.GenomicArrayOfSets("auto", stranded != "no")
     gff = HTSeq.GFF_Reader(gff_filename)
     counts = {}
-    genes_lengths = {}
+    genes_coverage_in_points = {}
+    genes_exons = {}
     attributes = {}
     i = 0
+
     try:
         for f in gff:
             if f.type == feature_type:
@@ -130,14 +154,24 @@ def write_to_samout(r, assignment, samoutfile):
                                      "running htseq-count in stranded mode. Use '--stranded=no'." %
                                      (f.name, f.iv))
                 features[f.iv] += feature_id
-                counts[f.attr[id_attribute]] = 0
-                genes_lengths[f.attr[id_attribute]] += f.interval.end - f.interval.start # TODO length!!!!
+
+
+                #counts[f.attr[id_attribute]] = 0
+
+                #ген - граница экзона
+                #здесь будут все интервалы и сумма всех интервалов
+                genes_exons[f.attr[id_attribute]][] = [[f.interval.start, f.interval.end],сумма всех экзонов+=]
+
+                #10 точек для гена для которых будем считать покрытие(интроны вычтем)
+                #будем считать что экзоны приходят отсортированные, в этом надо будет убедиться!
+                genes_coverage_in_points[f.attr[id_attribute]][] =
+
+
+
+
                 attributes[f.attr[id_attribute]] = [
                         f.attr[attr] if attr in f.attr else ''
                         for attr in additional_attributes]
-
-
-
 
             i += 1
             if i % 100000 == 0 and not quiet:
@@ -148,12 +182,43 @@ def write_to_samout(r, assignment, samoutfile):
             gff.get_line_number_string())
         raise
 
+
     if not quiet:
         sys.stderr.write("%d GFF lines processed.\n" % i)
 
-    if len(counts) == 0:
+    if len(genes_coverage_in_points) == 0:
         sys.stderr.write(
             "Warning: No features of type '%s' found.\n" % feature_type)
+
+
+    for gene,key in genes_exons:
+
+        for exon in gene:
+            genes_coverage_in_points[key] =
+
+
+    #TODO получаем здесь точки для измерения покрытия уже с учетом экзонов! 10 точек в каждом гене
+
+    for gene, key in genes_exons:
+        total = gene[total]# длина всех экзонов
+
+        for ten_interval in range(0,100,10):
+            point = (total*ten_interval)/100#точка в абсолютном исчислении
+            prev_exon_end = 0
+            for exon in gene:
+
+                #prev_exon_length + exon.start +
+                point += (exon.start - prev_exon_end) #длина интрона
+
+                if (point < exon.end):
+                    #пишем точку в конечный массив
+                    break# переход на следующую точку 10%
+                else:
+                    #длину экзона не уложившегося записываем
+                    #prev_exon_length += exon.end - exon.start
+                    prev_exon_end = exon.end
+    genes_coverage_in_points
+
 
     if samtype == "sam":
         SAM_or_BAM_Reader = HTSeq.SAM_Reader
@@ -216,7 +281,7 @@ def write_to_samout(r, assignment, samoutfile):
                 if not pe_mode:
                     if not r.aligned:
                         notaligned += 1
-                        write_to_samout(r, "__not_aligned", samoutfile)
+                        #write_to_samout(r, "__not_aligned", samoutfile)
                         continue
                     if ((secondary_alignment_mode == 'ignore') and
                        r.not_primary_alignment):
@@ -227,14 +292,14 @@ def write_to_samout(r, assignment, samoutfile):
                     try:
                         if r.optional_field("NH") > 1:
                             nonunique += 1
-                            write_to_samout(r, "__alignment_not_unique", samoutfile)
+                            #write_to_samout(r, "__alignment_not_unique", samoutfile)
                             if multimapped_mode == 'none':
                                 continue
                     except KeyError:
                         pass
                     if r.aQual < minaqual:
                         lowqual += 1
-                        write_to_samout(r, "__too_low_aQual", samoutfile)
+                        #write_to_samout(r, "__too_low_aQual", samoutfile)
                         continue
                     if stranded != "reverse":
                         iv_seq = (co.ref_iv for co in r.cigar if co.type ==
@@ -266,7 +331,7 @@ def write_to_samout(r, assignment, samoutfile):
                                      if co.type in com and co.size > 0))
                     else:
                         if (r[0] is None) or not (r[0].aligned):
-                            write_to_samout(r, "__not_aligned", samoutfile)
+                            #write_to_samout(r, "__not_aligned", samoutfile)
                             notaligned += 1
                             continue
                     if secondary_alignment_mode == 'ignore':
@@ -283,7 +348,7 @@ def write_to_samout(r, assignment, samoutfile):
                         if ((r[0] is not None and r[0].optional_field("NH") > 1) or
                            (r[1] is not None and r[1].optional_field("NH") > 1)):
                             nonunique += 1
-                            write_to_samout(r, "__alignment_not_unique", samoutfile)
+                            #write_to_samout(r, "__alignment_not_unique", samoutfile)
                             if multimapped_mode == 'none':
                                 continue
                     except KeyError:
@@ -291,7 +356,7 @@ def write_to_samout(r, assignment, samoutfile):
                     if ((r[0] and r[0].aQual < minaqual) or
                        (r[1] and r[1].aQual < minaqual)):
                         lowqual += 1
-                        write_to_samout(r, "__too_low_aQual", samoutfile)
+                        #write_to_samout(r, "__too_low_aQual", samoutfile)
                         continue
 
                 try:
@@ -319,22 +384,38 @@ def write_to_samout(r, assignment, samoutfile):
                         sys.exit("Illegal overlap mode.")
 
                     if fs is None or len(fs) == 0:
-                        write_to_samout(r, "__no_feature", samoutfile)
+                        #write_to_samout(r, "__no_feature", samoutfile)
                         empty += 1
                     elif len(fs) > 1:
-                        write_to_samout(r, "__ambiguous[" + '+'.join(fs) + "]",
-                                        samoutfile)
+                        #write_to_samout(r, "__ambiguous[" + '+'.join(fs) + "]",samoutfile)
                         ambiguous += 1
                     else:
-                        write_to_samout(r, list(fs)[0], samoutfile)
+                        #write_to_samout(r, list(fs)[0], samoutfile)
 
                     if fs is not None and len(fs) > 0:
                         if multimapped_mode == 'none':
                             if len(fs) == 1:
                                 counts[list(fs)[0]] += 1
-                                #read mapped only for one exon, (all cigar parts of both reads in pair mapped on one exon)
+                                #read mapped only for one exon, (all cigar parts of both reads in pair mapped on one gene, but may be for several exons)
                                 #we can take this read into account of analysis
                                 #they must come in sorted order by coordinate!
+                                #this is one unit of analysis. save it in memory and go throught it
+                                """
+                                храним  в памяти границы рида до тех пор пока его их не привысит левая граница очередного рида
+                                
+                                получаем массив с интервалами и покрытием каждого интервала , сначала в абсолютных координатах, потом в % с учетом вычитания интронов - это все храним для 1 гена, желательно делать для точек 10% разницей,
+                                
+
+                                сложение интервалов между двумя генами(будем складывать только точки в 10%, так проще и экономнее)
+                                
+                                """
+
+                                #TODO определить пересекает ли рид(левый или правый или оба,тогда за 1) одну из 10 точек этого гена, если да то +1 на эту точку!
+                                #вычесть из координвт рида координату начала гена(первого экзона?)
+                                #gene_name = list(fs)[0] - имя гена
+                                #genes_coverage_in_points[gene_name]
+                                #todo функцию написать!
+
 
 
                         elif multimapped_mode == 'all':
@@ -345,7 +426,7 @@ def write_to_samout(r, assignment, samoutfile):
 
 
                 except UnknownChrom:
-                    write_to_samout(r, "__no_feature", samoutfile)
+                    #write_to_samout(r, "__no_feature", samoutfile)
                     empty += 1
 
         except:
