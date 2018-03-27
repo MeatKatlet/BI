@@ -5,6 +5,7 @@ import warnings
 import traceback
 import os.path
 import HTSeq
+import math
 import HTSeq.scripts.count  as counts
 
 #HTSeq.
@@ -160,11 +161,18 @@ def count_reads_in_features(sam_filenames, gff_filename,
 
                 #ген - граница экзона
                 #здесь будут все интервалы и сумма всех интервалов
-                genes_exons[f.attr[id_attribute]][] = [[f.interval.start, f.interval.end],сумма всех экзонов+=]
+                gene_id = f.attr[id_attribute]
+                if (count(genes_exons[gene_id])==0):
+                    genes_exons[gene_id][] = [[f.interval.start, f.interval.end], total_sum_of_exons +=, gene_begin = первыйэкзон]
+
+                else :
+                    genes_exons[gene_id][] = [[f.interval.start, f.interval.end], total_sum_of_exons +=]
+
+
 
                 #10 точек для гена для которых будем считать покрытие(интроны вычтем)
                 #будем считать что экзоны приходят отсортированные, в этом надо будет убедиться!
-                genes_coverage_in_points[f.attr[id_attribute]][] =
+                #genes_coverage_in_points[gene_id][] =
 
 
 
@@ -172,6 +180,10 @@ def count_reads_in_features(sam_filenames, gff_filename,
                 attributes[f.attr[id_attribute]] = [
                         f.attr[attr] if attr in f.attr else ''
                         for attr in additional_attributes]
+
+            #elif f.type == "gene":
+
+
 
             i += 1
             if i % 100000 == 0 and not quiet:
@@ -191,33 +203,31 @@ def count_reads_in_features(sam_filenames, gff_filename,
             "Warning: No features of type '%s' found.\n" % feature_type)
 
 
-    for gene,key in genes_exons:
 
-        for exon in gene:
-            genes_coverage_in_points[key] =
+    #TODO получаем здесь точки для измерения покрытия уже с учетом интронов! 10 точек в каждом гене
+    #TODO подумать как можно улучшить алгоритм, чтобы не держать в памяти для сразу всех генов ряды по 10 точек
 
-
-    #TODO получаем здесь точки для измерения покрытия уже с учетом экзонов! 10 точек в каждом гене
-
-    for gene, key in genes_exons:
-        total = gene[total]# длина всех экзонов
+    for gene, gene_id in genes_exons:
+        total = gene[total_sum_of_exons]# длина всех экзонов
 
         for ten_interval in range(0,100,10):
             point = (total*ten_interval)/100#точка в абсолютном исчислении
             prev_exon_end = 0
-            for exon in gene:
+            for exon,exon_key in gene:
 
                 #prev_exon_length + exon.start +
                 point += (exon.start - prev_exon_end) #длина интрона
 
                 if (point < exon.end):
                     #пишем точку в конечный массив
+                    genes_coverage_in_points[gene_id][ten_interval] = ["point": point, "coverege": 0]
+
                     break# переход на следующую точку 10%
                 else:
                     #длину экзона не уложившегося записываем
                     #prev_exon_length += exon.end - exon.start
                     prev_exon_end = exon.end
-    genes_coverage_in_points
+
 
 
     if samtype == "sam":
@@ -412,10 +422,10 @@ def count_reads_in_features(sam_filenames, gff_filename,
 
                                 #TODO определить пересекает ли рид(левый или правый или оба,тогда за 1) одну из 10 точек этого гена, если да то +1 на эту точку!
                                 #вычесть из координвт рида координату начала гена(первого экзона?)
-                                #gene_name = list(fs)[0] - имя гена
+                                gene_name = list(fs)[0]# - имя гена
                                 #genes_coverage_in_points[gene_name]
                                 #todo функцию написать!
-
+                                check_and_count_points_coverage(gene_name, first_read, second_read)
 
 
                         elif multimapped_mode == 'all':
@@ -460,6 +470,61 @@ def count_reads_in_features(sam_filenames, gff_filename,
     print('\t'.join(["__too_low_aQual"] + pad + [str(c) for c in lowqual_all]))
     print('\t'.join(["__not_aligned"] + pad + [str(c) for c in notaligned_all]))
     print('\t'.join(["__alignment_not_unique"] + pad + [str(c) for c in nonunique_all]))
+
+
+
+def check_and_count_points_coverage(gene_name,first_read,second_read):
+
+
+    #определить какую из точек пересекает
+    #вычесть из каждой координаты координату начала гена!
+
+    fstart = first_read.start
+    fend = first_read.end
+    sstart = second_read.start
+    send = second_read.end
+    #TODO проверку на overlap!
+
+    #проверять будем каждый рид по отдельности?,
+    #если риды перекрываются то сливаем их в один интервал
+
+    #10 20 25 30 40 50 60 70 80 90 100
+
+    total = 100
+    half = total/2
+    left_interval = right_interval = half
+
+
+while (left_interval >= 10) :
+
+    if (isset(genes_coverage_in_points[gene_name][half])==false):#если точки нет то ище
+
+        closest_point = math.ceil(half)
+        point = genes_coverage_in_points[gene_name][closest_point]["point"]
+        right_interval += 5
+        left_interval -= 5
+
+
+    elif:#если точка есть,
+        point = genes_coverage_in_points[gene_name][half]["point"]
+
+
+    if (point < fstart):  # слева точка от рида, рид справой строны
+
+        half = half + (right_interval / 2)
+        left_interval = right_interval  = right_interval / 2
+
+    elif (point > fend):  # точка справа от рида, рид слевой стороны
+
+        half = half - (left_interval / 2)
+        left_interval = right_interval = left_interval / 2
+
+
+    elif (point > fstart and point < fend):  # пересекает
+        genes_coverage_in_points[gene_name][half]["coverage"] += 1
+        return
+
+
 
 
 
