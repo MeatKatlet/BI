@@ -1,3 +1,6 @@
+import matplotlib
+matplotlib.use('TkAgg')
+import matplotlib.pyplot as plt
 import sys
 import argparse
 import itertools
@@ -6,11 +9,12 @@ import traceback
 import os.path
 import HTSeq
 import math
-import HTSeq.scripts.count  as counts
+import numpy as np
+#import HTSeq.scripts.count  as counts
 
 #HTSeq.
 
-a = 1
+#a = 1
 #counts.count_reads_in_features()
 
 
@@ -27,22 +31,22 @@ a = 1
 #ga[ HTSeq.GenomicPosition( "chr1", 300, "+" ) ]
 #>> 20
 
-gas = HTSeq.GenomicArrayOfSets( ["chr1", "chr2"], stranded=False )
+#gas = HTSeq.GenomicArrayOfSets( ["chr1", "chr2"], stranded=False )
 
-ivA = HTSeq.GenomicInterval( "chr1", 100, 300, "." )
+#ivA = HTSeq.GenomicInterval( "chr1", 100, 300, "." )
 
-ivB = HTSeq.GenomicInterval( "chr1", 200, 500, "." )
+#ivB = HTSeq.GenomicInterval( "chr1", 200, 500, "." )
 
 
-gas[ivA] += "gene A"
-gas[ivB] += "gene B"
+#gas[ivA] += "gene A"
+#gas[ivB] += "gene B"
 
 #print([(st[0], sorted(st[1])) for st in gas[ HTSeq.GenomicInterval( "chr1", 0, 500, "." ) ].steps()])
 
 #####
-fs = None
+#fs = None
 # take cigar intervals and query
-
+"""
 for iv3, fs2 in gas[ HTSeq.GenomicInterval( "chr1", 210, 290, "." ) ].steps():
     print(iv3)
     print(fs2)
@@ -51,6 +55,8 @@ for iv3, fs2 in gas[ HTSeq.GenomicInterval( "chr1", 210, 290, "." ) ].steps():
         fs = fs2.copy()
     else:
         fs = fs.intersection(fs2)
+"""
+
 
 #my_set_1 = set(["gene A", "gene B", "gene C"])
 #my_set_2 = set(["gene A", "gene D", "gene C"])
@@ -90,6 +96,10 @@ for iv3, fs2 in gas[ HTSeq.GenomicInterval( "chr1", 210, 290, "." ) ].steps():
 для большинства ридов 
 """
 
+class UnknownChrom(Exception):
+    pass
+
+
 def invert_strand(iv):
     iv2 = iv.copy()
     if iv2.strand == "+":
@@ -112,9 +122,77 @@ def count_reads_in_features(sam_filenames, gff_filename,
                             additional_attributes,
                             quiet, minaqual, samouts):
 
+    def exists(obj, chain):
+        _key = chain.pop(0)
+        if _key in obj:
+            return exists(obj[_key], chain) if chain else obj[_key]
+
+    def check_and_count_points_coverage(gene_id, first_read, second_read):
+
+        # определить какую из точек пересекает
+        # вычесть из каждой координаты координату начала гена!
+
+        gene_begin = genes_exons[gene_id][0][2]
+
+        fstart = first_read.start - gene_begin
+        fend = first_read.end - gene_begin
+        sstart = second_read.start - gene_begin
+        send = second_read.end - gene_begin
 
 
+        if (first_read.proper_pair == False or second_read.proper_pair == False):
+            return
+            """
+            if (fstart <= sstart and fend > sstart):#пересекаются конец первого начало второго
 
+            elif(fstart>sstart and send > fstart):#пересекаются конец первого начало второго
+
+            elif(fstart>sstart):
+            """
+
+        # overlapped
+        if (math.fabs(first_read.inferred_insert_size) == math.fabs(
+                second_read.inferred_insert_size) and first_read.iv.length + second_read.iv.length < ath.fabs(
+                first_read.inferred_insert_size)):
+            if (fstart <= sstart):
+                check(gene_id, fstart, send)
+            elif (sstart <= fstart):
+                check(gene_id, fstart, send)
+        else:
+            check(gene_id, fstart, fend)
+            check(gene_id, sstart, send)
+
+    def check(gene_id, start, end):
+        total = 100
+        half = total / 2
+        left_interval = right_interval = half
+
+        while (left_interval >= 10):
+
+            if (exists(genes_coverage_in_points, [gene_id, half]) == None):  # если точки нет то ищем ближаишую слева
+                half = math.ceil(half)
+                point = genes_coverage_in_points[gene_id][half]["point"]
+                right_interval += 5
+                left_interval -= 5
+
+
+            else:  # если точка есть,
+                point = genes_coverage_in_points[gene_id][half]["point"]
+
+            if (point < start):  # слева точка от рида, рид справой строны
+
+                half = half + (right_interval / 2)
+                left_interval = right_interval = right_interval / 2
+
+            elif (point > end):  # точка справа от рида, рид слевой стороны
+
+                half = half - (left_interval / 2)
+                left_interval = right_interval = left_interval / 2
+
+
+            elif (point > start and point < end):  # пересекает
+                genes_coverage_in_points[gene_id][half]["coverage"] += 1
+                return
 
     if samouts != "":
         if len(samouts) != len(sam_filenames):
@@ -136,10 +214,10 @@ def count_reads_in_features(sam_filenames, gff_filename,
 
     features = HTSeq.GenomicArrayOfSets("auto", stranded != "no")
     gff = HTSeq.GFF_Reader(gff_filename)
-    counts = {}
+
     genes_coverage_in_points = {}
     genes_exons = {}
-    attributes = {}
+
     i = 0
 
     try:
@@ -161,25 +239,29 @@ def count_reads_in_features(sam_filenames, gff_filename,
 
                 #ген - граница экзона
                 #здесь будут все интервалы и сумма всех интервалов
-                gene_id = f.attr[id_attribute]
-                if (count(genes_exons[gene_id])==0):
-                    genes_exons[gene_id][] = [[f.interval.start, f.interval.end], total_sum_of_exons +=, gene_begin = первыйэкзон]
+                gene_id = feature_id #f.attr[id_attribute]
+                #if (count(genes_exons[gene_id])==0):
+                if (exists(genes_exons, [gene_id]) == None):
+                    #координата первого экзона
+                    genes_exons[gene_id].append({"coords": [f.interval.start, f.interval.end], "total_sum_of_exons": 0, "gene_begin": f.iv.start})
 
                 else :
-                    genes_exons[gene_id][] = [[f.interval.start, f.interval.end], total_sum_of_exons +=]
+                    genes_exons[gene_id][0]["total_sum_of_exons"] += f.iv.end - f.iv.start #last in list
 
 
+                    genes_exons[gene_id].append({"coords": [f.interval.start, f.interval.end]})
 
                 #10 точек для гена для которых будем считать покрытие(интроны вычтем)
                 #будем считать что экзоны приходят отсортированные, в этом надо будет убедиться!
                 #genes_coverage_in_points[gene_id][] =
 
-
-
-
+                """
                 attributes[f.attr[id_attribute]] = [
                         f.attr[attr] if attr in f.attr else ''
                         for attr in additional_attributes]
+                """
+
+
 
             #elif f.type == "gene":
 
@@ -207,20 +289,21 @@ def count_reads_in_features(sam_filenames, gff_filename,
     #TODO получаем здесь точки для измерения покрытия уже с учетом интронов! 10 точек в каждом гене
     #TODO подумать как можно улучшить алгоритм, чтобы не держать в памяти для сразу всех генов ряды по 10 точек
 
-    for gene, gene_id in genes_exons:
-        total = gene[total_sum_of_exons]# длина всех экзонов
+    for gene_id, gene in genes_exons:
+        total = gene[0]["total_sum_of_exons"]# длина всех экзонов
 
-        for ten_interval in range(0,100,10):
+        for ten_interval in xrange(0,100,10):
             point = (total*ten_interval)/100#точка в абсолютном исчислении
             prev_exon_end = 0
-            for exon,exon_key in gene:
+
+            for exon_key, exon in gene:
 
                 #prev_exon_length + exon.start +
                 point += (exon.start - prev_exon_end) #длина интрона
 
                 if (point < exon.end):
                     #пишем точку в конечный массив
-                    genes_coverage_in_points[gene_id][ten_interval] = ["point": point, "coverege": 0]
+                    genes_coverage_in_points[gene_id][ten_interval] = {"point": point, "coverage": 0}
 
                     break# переход на следующую точку 10%
                 else:
@@ -237,12 +320,12 @@ def count_reads_in_features(sam_filenames, gff_filename,
     else:
         raise ValueError("Unknown input format %s specified." % samtype)
 
-    counts_all = []
-    empty_all = []
-    ambiguous_all = []
-    notaligned_all = []
-    lowqual_all = []
-    nonunique_all = []
+    #counts_all = []
+    #empty_all = []
+    #ambiguous_all = []
+    #notaligned_all = []
+    #lowqual_all = []
+    #nonunique_all = []
     for isam, (sam_filename) in enumerate(sam_filenames):
         if samouts != '':
             samoutfile = open(samouts[isam], 'w')
@@ -275,11 +358,11 @@ def count_reads_in_features(sam_filenames, gff_filename,
                             max_buffer_size=max_buffer_size)
                 else:
                     raise ValueError("Illegal order specified.")
-            empty = 0
-            ambiguous = 0
+            #empty = 0
+            #ambiguous = 0
             notaligned = 0
             lowqual = 0
-            nonunique = 0
+            #nonunique = 0
             i = 0
             for r in read_seq:
                 if i > 0 and i % 100000 == 0 and not quiet:
@@ -290,7 +373,7 @@ def count_reads_in_features(sam_filenames, gff_filename,
                 i += 1
                 if not pe_mode:
                     if not r.aligned:
-                        notaligned += 1
+                        #notaligned += 1
                         #write_to_samout(r, "__not_aligned", samoutfile)
                         continue
                     if ((secondary_alignment_mode == 'ignore') and
@@ -301,7 +384,7 @@ def count_reads_in_features(sam_filenames, gff_filename,
                         continue
                     try:
                         if r.optional_field("NH") > 1:
-                            nonunique += 1
+                            #nonunique += 1
                             #write_to_samout(r, "__alignment_not_unique", samoutfile)
                             if multimapped_mode == 'none':
                                 continue
@@ -342,7 +425,7 @@ def count_reads_in_features(sam_filenames, gff_filename,
                     else:
                         if (r[0] is None) or not (r[0].aligned):
                             #write_to_samout(r, "__not_aligned", samoutfile)
-                            notaligned += 1
+                            #notaligned += 1
                             continue
                     if secondary_alignment_mode == 'ignore':
                         if (r[0] is not None) and r[0].not_primary_alignment:
@@ -357,7 +440,7 @@ def count_reads_in_features(sam_filenames, gff_filename,
                     try:
                         if ((r[0] is not None and r[0].optional_field("NH") > 1) or
                            (r[1] is not None and r[1].optional_field("NH") > 1)):
-                            nonunique += 1
+                            #nonunique += 1
                             #write_to_samout(r, "__alignment_not_unique", samoutfile)
                             if multimapped_mode == 'none':
                                 continue
@@ -393,19 +476,14 @@ def count_reads_in_features(sam_filenames, gff_filename,
                     else:
                         sys.exit("Illegal overlap mode.")
 
-                    if fs is None or len(fs) == 0:
-                        #write_to_samout(r, "__no_feature", samoutfile)
-                        empty += 1
-                    elif len(fs) > 1:
-                        #write_to_samout(r, "__ambiguous[" + '+'.join(fs) + "]",samoutfile)
-                        ambiguous += 1
-                    else:
-                        #write_to_samout(r, list(fs)[0], samoutfile)
+
+
+
 
                     if fs is not None and len(fs) > 0:
                         if multimapped_mode == 'none':
                             if len(fs) == 1:
-                                counts[list(fs)[0]] += 1
+                                #counts[list(fs)[0]] += 1
                                 #read mapped only for one exon, (all cigar parts of both reads in pair mapped on one gene, but may be for several exons)
                                 #we can take this read into account of analysis
                                 #they must come in sorted order by coordinate!
@@ -415,29 +493,29 @@ def count_reads_in_features(sam_filenames, gff_filename,
                                 
                                 получаем массив с интервалами и покрытием каждого интервала , сначала в абсолютных координатах, потом в % с учетом вычитания интронов - это все храним для 1 гена, желательно делать для точек 10% разницей,
                                 
-
                                 сложение интервалов между двумя генами(будем складывать только точки в 10%, так проще и экономнее)
                                 
                                 """
 
-                                #TODO определить пересекает ли рид(левый или правый или оба,тогда за 1) одну из 10 точек этого гена, если да то +1 на эту точку!
-                                #вычесть из координвт рида координату начала гена(первого экзона?)
+
                                 gene_name = list(fs)[0]# - имя гена
-                                #genes_coverage_in_points[gene_name]
-                                #todo функцию написать!
-                                check_and_count_points_coverage(gene_name, first_read, second_read)
+
+                                check_and_count_points_coverage(gene_name, r[0].iv, r[1].iv)
 
 
-                        elif multimapped_mode == 'all':
-                            for fsi in list(fs):
-                                counts[fsi] += 1
+                            """
+                            elif multimapped_mode == 'all':
+                                for fsi in list(fs):
+                                    #counts[fsi] += 1 
+                            """
                         else:
                             sys.exit("Illegal multimap mode.")
 
 
                 except UnknownChrom:
                     #write_to_samout(r, "__no_feature", samoutfile)
-                    empty += 1
+                    #empty += 1
+                    raise
 
         except:
             sys.stderr.write(
@@ -453,76 +531,167 @@ def count_reads_in_features(sam_filenames, gff_filename,
         if samoutfile is not None:
             samoutfile.close()
 
-        counts_all.append(counts.copy())
-        for fn in counts:
-            counts[fn] = 0
-        empty_all.append(empty)
-        ambiguous_all.append(ambiguous)
-        lowqual_all.append(lowqual)
-        notaligned_all.append(notaligned)
-        nonunique_all.append(nonunique)
 
-    pad = ['' for attr in additional_attributes]
-    for fn in sorted(counts.keys()):
-        print('\t'.join([fn] + attributes[fn] + [str(c[fn]) for c in counts_all]))
-    print('\t'.join(["__no_feature"] + pad + [str(c) for c in empty_all]))
-    print('\t'.join(["__ambiguous"] + pad + [str(c) for c in ambiguous_all]))
-    print('\t'.join(["__too_low_aQual"] + pad + [str(c) for c in lowqual_all]))
-    print('\t'.join(["__not_aligned"] + pad + [str(c) for c in notaligned_all]))
-    print('\t'.join(["__alignment_not_unique"] + pad + [str(c) for c in nonunique_all]))
+        #genes_coverage_in_points[gene_id][half]["coverage"]
 
+        y = np.arange(0, 10, 1)#TODO нормировать?
+        x = np.arange(0, 10, 1)
 
+        for gene_id, gene in genes_coverage_in_points:
 
-def check_and_count_points_coverage(gene_name,first_read,second_read):
+            i = 0
+            for val in gene:
+                y[i] += val["coverage"]
+                i +=1
+
+        #TODO продумать расчет ошибки!, стандартное отклонение?
+        plt.errorbar(x, y, yerr=[7, 3, 5, 7, 1], color='red', ls='--', marker='o', capsize=5, capthick=1,ecolor='black')
+
+        plt.show()
 
 
-    #определить какую из точек пересекает
-    #вычесть из каждой координаты координату начала гена!
 
-    fstart = first_read.start
-    fend = first_read.end
-    sstart = second_read.start
-    send = second_read.end
-    #TODO проверку на overlap!
-
-    #проверять будем каждый рид по отдельности?,
-    #если риды перекрываются то сливаем их в один интервал
-
-    #10 20 25 30 40 50 60 70 80 90 100
-
-    total = 100
-    half = total/2
-    left_interval = right_interval = half
+def my_showwarning(message, category, filename, lineno=None, file=None, line=None):
+    sys.stderr.write("Warning: %s\n" % message)
 
 
-while (left_interval >= 10) :
 
-    if (isset(genes_coverage_in_points[gene_name][half])==false):#если точки нет то ище
+def main():
 
-        closest_point = math.ceil(half)
-        point = genes_coverage_in_points[gene_name][closest_point]["point"]
-        right_interval += 5
-        left_interval -= 5
+    pa = argparse.ArgumentParser(
+        usage="%(prog)s [options] alignment_file gff_file",
+        description="This script takes one or more alignment files in SAM/BAM " +
+        "format and a feature file in GFF format and calculates for each feature " +
+        "the number of reads mapping to it. See " +
+        "http://htseq.readthedocs.io/en/master/count.html for details.",
+        epilog="Written by Simon Anders (sanders@fs.tum.de), " +
+        "European Molecular Biology Laboratory (EMBL). (c) 2010. " +
+        "Released under the terms of the GNU General Public License v3. " +
+        "Part of the 'HTSeq' framework, version %s." % HTSeq.__version__)
+
+    pa.add_argument(
+            "samfilenames", nargs='+', type=str,
+            help="Path to the SAM/BAM files containing the mapped reads. " +
+            "If '-' is selected, read from standard input")
+
+    pa.add_argument(
+            "featuresfilename", type=str,
+            help="Path to the file containing the features")
+
+    pa.add_argument(
+            "-f", "--format", dest="samtype",
+            choices=("sam", "bam"), default="sam",
+            help="type of <alignment_file> data, either 'sam' or 'bam' (default: sam)")
+
+    pa.add_argument(
+            "-r", "--order", dest="order",
+            choices=("pos", "name"), default="name",
+            help="'pos' or 'name'. Sorting order of <alignment_file> (default: name). Paired-end sequencing " +
+            "data must be sorted either by position or by read name, and the sorting order " +
+            "must be specified. Ignored for single-end data.")
+
+    pa.add_argument(
+            "--max-reads-in-buffer", dest="max_buffer_size", type=int,
+            default=30000000,
+            help="When <alignment_file> is paired end sorted by position, " +
+            "allow only so many reads to stay in memory until the mates are " +
+            "found (raising this number will use more memory). Has no effect " +
+            "for single end or paired end sorted by name")
+
+    pa.add_argument(
+            "-s", "--stranded", dest="stranded",
+            choices=("yes", "no", "reverse"), default="yes",
+            help="whether the data is from a strand-specific assay. Specify 'yes', " +
+            "'no', or 'reverse' (default: yes). " +
+            "'reverse' means 'yes' with reversed strand interpretation")
+
+    pa.add_argument(
+            "-a", "--minaqual", type=int, dest="minaqual",
+            default=10,
+            help="skip all reads with alignment quality lower than the given " +
+            "minimum value (default: 10)")
+
+    pa.add_argument(
+            "-t", "--type", type=str, dest="featuretype",
+            default="exon", help="feature type (3rd column in GFF file) to be used, " +
+            "all features of other type are ignored (default, suitable for Ensembl " +
+            "GTF files: exon)")
+
+    pa.add_argument(
+            "-i", "--idattr", type=str, dest="idattr",
+            default="gene_id", help="GFF attribute to be used as feature ID (default, " +
+            "suitable for Ensembl GTF files: gene_id)")
+
+    pa.add_argument(
+            "--additional-attr", type=str, nargs='+',
+            default=(), help="Additional feature attributes (default: none, " +
+            "suitable for Ensembl GTF files: gene_name)")
+
+    pa.add_argument(
+            "-m", "--mode", dest="mode",
+            choices=("union", "intersection-strict", "intersection-nonempty"),
+            default="union", help="mode to handle reads overlapping more than one feature " +
+            "(choices: union, intersection-strict, intersection-nonempty; default: union)")
+
+    pa.add_argument(
+            "--nonunique", dest="nonunique", type=str,
+            choices=("none", "all"), default="none",
+            help="Whether to score reads that are not uniquely aligned " +
+            "or ambiguously assigned to features")
+
+    pa.add_argument(
+            "--secondary-alignments", dest="secondary_alignments", type=str,
+            choices=("score", "ignore"), default="score",
+            help="Whether to score secondary alignments (0x100 flag)")
+
+    pa.add_argument(
+            "--supplementary-alignments", dest="supplementary_alignments", type=str,
+            choices=("score", "ignore"), default="score",
+            help="Whether to score supplementary alignments (0x800 flag)")
+
+    pa.add_argument(
+            "-o", "--samout", type=str, dest="samouts", nargs='+',
+            default="", help="write out all SAM alignment records into an output " +
+            "SAM file called SAMOUT, annotating each line with its feature assignment " +
+            "(as an optional field with tag 'XF')")
+
+    pa.add_argument(
+            "-q", "--quiet", action="store_true", dest="quiet",
+            help="suppress progress report")  # and warnings" )
+
+    args = pa.parse_args()
+
+    warnings.showwarning = my_showwarning
+    try:
+        count_reads_in_features(
+                args.samfilenames,
+                args.featuresfilename,
+                args.samtype,
+                args.order,
+                args.max_buffer_size,
+                args.stranded,
+                args.mode,
+                args.nonunique,
+                args.secondary_alignments,
+                args.supplementary_alignments,
+                args.featuretype,
+                args.idattr,
+                args.additional_attr,
+                args.quiet,
+                args.minaqual,
+                args.samouts)
+    except:
+        sys.stderr.write("  %s\n" % str(sys.exc_info()[1]))
+        sys.stderr.write("  [Exception type: %s, raised in %s:%d]\n" %
+                         (sys.exc_info()[1].__class__.__name__,
+                          os.path.basename(traceback.extract_tb(
+                              sys.exc_info()[2])[-1][0]),
+                          traceback.extract_tb(sys.exc_info()[2])[-1][1]))
+        sys.exit(1)
 
 
-    elif:#если точка есть,
-        point = genes_coverage_in_points[gene_name][half]["point"]
-
-
-    if (point < fstart):  # слева точка от рида, рид справой строны
-
-        half = half + (right_interval / 2)
-        left_interval = right_interval  = right_interval / 2
-
-    elif (point > fend):  # точка справа от рида, рид слевой стороны
-
-        half = half - (left_interval / 2)
-        left_interval = right_interval = left_interval / 2
-
-
-    elif (point > fstart and point < fend):  # пересекает
-        genes_coverage_in_points[gene_name][half]["coverage"] += 1
-        return
+if __name__ == "__main__":
+    main()
 
 
 

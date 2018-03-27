@@ -4,6 +4,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 x = np.arange(0, 5, 1)
+
 x2 = np.arange(0, 5, 1)
 #stdev = np.array([1, 19])
 
