@@ -129,12 +129,37 @@ def count_reads_in_features(sam_filenames, gff_filename,
         if _key in obj:
             return exists(obj[_key], chain) if chain else obj[_key]
 
+    def check_overlapped_exons_and_calc_sum(gene):
+
+        rightmost_value = gene["exons"][0][1]
+        start = gene["exons"][0][0]
+        new_exons = []
+        total = 0
+        for interval in gene["exons"]:
+
+            if (interval[0] <= rightmost_value and interval[1] >= rightmost_value):
+
+                rightmost_value = interval[1]
+
+            elif (interval[0] > rightmost_value):
+                new_exons.append([start, rightmost_value])
+                total += (rightmost_value - start)
+                start = interval[0]
+                rightmost_value = interval[1]
+
+        new_exons.append([start, rightmost_value])
+
+        gene["exons"] = new_exons
+        gene["total_sum_of_exons"] = total
+
+
+
     def check_and_count_points_coverage(gene_id, first_read, second_read):
 
         # определить какую из точек пересекает
         # вычесть из каждой координаты координату начала гена!
 
-        gene_begin = genes_exons[gene_id][0]["gene_begin"]
+        gene_begin = genes_exons[gene_id]["gene_begin"]
 
         fstart = first_read.iv.start - gene_begin
         fend = first_read.iv.end - gene_begin
@@ -157,7 +182,7 @@ def count_reads_in_features(sam_filenames, gff_filename,
             if (fstart <= sstart):
                 check(gene_id, fstart, send)
             elif (sstart <= fstart):
-                check(gene_id, fstart, send)
+                check(gene_id, sstart, fend)
         else:
             check(gene_id, fstart, fend)
             check(gene_id, sstart, send)
@@ -170,7 +195,8 @@ def count_reads_in_features(sam_filenames, gff_filename,
         while (left_interval >= 10):
 
             if (exists(genes_coverage_in_points, [gene_id, half]) == None):  # если точки нет то ищем ближаишую слева
-                half = math.ceil(half)
+                #half = math.ceil(half)
+                half = int(math.floor(half / 10) * 10)
                 point = genes_coverage_in_points[gene_id][half]["point"]
                 right_interval += 5
                 left_interval -= 5
@@ -245,38 +271,26 @@ def count_reads_in_features(sam_filenames, gff_filename,
                 #if (count(genes_exons[gene_id])==0):
                 if (exists(genes_exons, [gene_id]) == None):
                     #координата первого экзона
-                    #todo gene_begin - после сортировки - самый крайний экзон!
-                    genes_exons[gene_id] = {"total_sum_of_exons": 0, "gene_begin": 0, "exons": list([f.iv.start, f.iv.end])}
+
+                    genes_exons[gene_id] = {"total_sum_of_exons": 0, "gene_begin": 0, "exons": list([[f.iv.start, f.iv.end]])}
 
                     #genes_exons[gene_id].append({"coords": [f.iv.start, f.iv.end], "total_sum_of_exons": 0, "gene_begin": f.iv.start})
 
                 else :
-                    #todo обдумать ситуацию когда экзоны пересекаются
-                    genes_exons[gene_id]["total_sum_of_exons"] += f.iv.end - f.iv.start #last in list
+
+                    #genes_exons[gene_id]["total_sum_of_exons"] += f.iv.end - f.iv.start #last in list
 
                     genes_exons[gene_id]["exons"].append([f.iv.start, f.iv.end])
 
                     #genes_exons[gene_id].append({"coords": [f.iv.start, f.iv.end]})
 
                 #10 точек для гена для которых будем считать покрытие(интроны вычтем)
-                #будем считать что экзоны приходят отсортированные, в этом надо будет убедиться!
-                #genes_coverage_in_points[gene_id][] =
-
-                """
-                attributes[f.attr[id_attribute]] = [
-                        f.attr[attr] if attr in f.attr else ''
-                        for attr in additional_attributes]
-                """
-
-
-
-            #elif f.type == "gene":
-
 
 
             i += 1
             if i % 100000 == 0 and not quiet:
                 sys.stderr.write("%d GFF lines processed.\n" % i)
+
 
     except:
         sys.stderr.write("Error occured when processing GFF file (%s):\n" % gff.get_line_number_string())
@@ -291,7 +305,6 @@ def count_reads_in_features(sam_filenames, gff_filename,
 
 
 
-    #TODO получаем здесь точки для измерения покрытия уже с учетом интронов! 10 точек в каждом гене
     #TODO подумать как можно улучшить алгоритм, чтобы не держать в памяти для сразу всех генов ряды по 10 точек
 
 
@@ -300,19 +313,27 @@ def count_reads_in_features(sam_filenames, gff_filename,
     #пересекающиеся экзоны надо склеивать и расширять границы
     #после склеивания будем получать сумму экзонов total_sum_of_exons, т.е. мы получим участки непокрытые ни на одном стренде
 
+
     for gene_id, gene in genes_exons.iteritems():
-        total = gene[0]["total_sum_of_exons"]# длина всех экзонов
+
+        gene["exons"].sort() #by first member
+        gene["gene_begin"] = gene["exons"][0][0]
+        #TODO слить все пересекающиеся экзоны и одновременно посчитать сумму длин без полученных промежутков
+
+        check_overlapped_exons_and_calc_sum(gene)
+
+        total = gene["total_sum_of_exons"] # длина всех экзонов
 
         for ten_interval in xrange(0,100,10):
-            point = (total*ten_interval)/100#точка в абсолютном исчислении
+            point = (total*ten_interval)/100 #точка в абсолютном исчислении % от длины экзона
             prev_exon_end = 0
 
-            for exon_key, exon in enumerate(gene):
+            for exon_key, exon in enumerate(gene["exons"]):
 
                 #prev_exon_length + exon.start +
-                point += (exon["coords"][0] - prev_exon_end) #длина интрона
+                point += (exon[0] - prev_exon_end) #длина интрона
 
-                if (point < exon["coords"][1]):#точка конца экзона
+                if (point < exon[1]): #точка конца экзона
                     #пишем точку в конечный массив
                     genes_coverage_in_points[gene_id][ten_interval] = {"point": point, "coverage": 0}
 
@@ -320,7 +341,7 @@ def count_reads_in_features(sam_filenames, gff_filename,
                 else:
                     #длину экзона не уложившегося записываем
                     #prev_exon_length += exon.end - exon.start
-                    prev_exon_end = exon["coords"][1]
+                    prev_exon_end = exon[1]
 
 
 
@@ -545,10 +566,10 @@ def count_reads_in_features(sam_filenames, gff_filename,
 
         #genes_coverage_in_points[gene_id][half]["coverage"]
 
-        y = np.arange(0, 10, 1)#TODO нормировать?
+        y = np.arange(0, 10, 1)#TODO нормировать, да на количество выровненных ридов на ген,+ можно на длину гена, FPKM?
         x = np.arange(0, 10, 1)
 
-        for gene_id, gene in genes_coverage_in_points:
+        for gene_id, gene in genes_coverage_in_points.iteritems():
 
             i = 0
             for val in gene:
@@ -556,6 +577,9 @@ def count_reads_in_features(sam_filenames, gff_filename,
                 i +=1
 
         #TODO продумать расчет ошибки!, стандартное отклонение?
+        #TODO можно сложить все значения покрытий, а можно получить среднее
+        #TODO надо отфильтровать файл с вырвыниваниями, чтобы было меньше работы, нужны только proper_paired без multiple alingment
+
         plt.errorbar(x, y, yerr=[7, 3, 5, 7, 1], color='red', ls='--', marker='o', capsize=5, capthick=1,ecolor='black')
 
         plt.show()
