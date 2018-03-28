@@ -11,6 +11,7 @@ import os.path
 import HTSeq
 import math
 import numpy as np
+from collections import defaultdict
 #import HTSeq.scripts.count  as counts
 
 #HTSeq.
@@ -133,12 +134,12 @@ def count_reads_in_features(sam_filenames, gff_filename,
         # определить какую из точек пересекает
         # вычесть из каждой координаты координату начала гена!
 
-        gene_begin = genes_exons[gene_id][0][2]
+        gene_begin = genes_exons[gene_id][0]["gene_begin"]
 
-        fstart = first_read.start - gene_begin
-        fend = first_read.end - gene_begin
-        sstart = second_read.start - gene_begin
-        send = second_read.end - gene_begin
+        fstart = first_read.iv.start - gene_begin
+        fend = first_read.iv.end - gene_begin
+        sstart = second_read.iv.start - gene_begin
+        send = second_read.iv.end - gene_begin
 
 
         if (first_read.proper_pair == False or second_read.proper_pair == False):
@@ -152,9 +153,7 @@ def count_reads_in_features(sam_filenames, gff_filename,
             """
 
         # overlapped
-        if (math.fabs(first_read.inferred_insert_size) == math.fabs(
-                second_read.inferred_insert_size) and first_read.iv.length + second_read.iv.length < ath.fabs(
-                first_read.inferred_insert_size)):
+        if (math.fabs(first_read.inferred_insert_size) == math.fabs(second_read.inferred_insert_size) and first_read.iv.length + second_read.iv.length < math.fabs(first_read.inferred_insert_size)):
             if (fstart <= sstart):
                 check(gene_id, fstart, send)
             elif (sstart <= fstart):
@@ -216,9 +215,11 @@ def count_reads_in_features(sam_filenames, gff_filename,
     features = HTSeq.GenomicArrayOfSets("auto", stranded != "no")
     gff = HTSeq.GFF_Reader(gff_filename)
 
-    genes_coverage_in_points = {}
-    genes_exons = {}
+    #genes_coverage_in_points = {}
+    genes_coverage_in_points = defaultdict(dict)
+    #genes_exons = {}
 
+    genes_exons = defaultdict(dict)
     i = 0
 
     try:
@@ -227,30 +228,35 @@ def count_reads_in_features(sam_filenames, gff_filename,
                 try:
                     feature_id = f.attr[id_attribute]
                 except KeyError:
-                    raise ValueError("Feature %s does not contain a '%s' attribute" %
-                                     (f.name, id_attribute))
+                    raise ValueError("Feature %s does not contain a '%s' attribute" % (f.name, id_attribute))
                 if stranded != "no" and f.iv.strand == ".":
-                    raise ValueError("Feature %s at %s does not have strand information but you are "
-                                     "running htseq-count in stranded mode. Use '--stranded=no'." %
-                                     (f.name, f.iv))
+                    raise ValueError("Feature %s at %s does not have strand information but you are ""running htseq-count in stranded mode. Use '--stranded=no'." % (f.name, f.iv))
+
+
                 features[f.iv] += feature_id
 
 
                 #counts[f.attr[id_attribute]] = 0
 
+                #TODO экзоны не в порядке сортировки! координат
                 #ген - граница экзона
                 #здесь будут все интервалы и сумма всех интервалов
                 gene_id = feature_id #f.attr[id_attribute]
                 #if (count(genes_exons[gene_id])==0):
                 if (exists(genes_exons, [gene_id]) == None):
                     #координата первого экзона
-                    genes_exons[gene_id].append({"coords": [f.interval.start, f.interval.end], "total_sum_of_exons": 0, "gene_begin": f.iv.start})
+                    #todo gene_begin - после сортировки - самый крайний экзон!
+                    genes_exons[gene_id] = {"total_sum_of_exons": 0, "gene_begin": 0, "exons": list([f.iv.start, f.iv.end])}
+
+                    #genes_exons[gene_id].append({"coords": [f.iv.start, f.iv.end], "total_sum_of_exons": 0, "gene_begin": f.iv.start})
 
                 else :
-                    genes_exons[gene_id][0]["total_sum_of_exons"] += f.iv.end - f.iv.start #last in list
+                    #todo обдумать ситуацию когда экзоны пересекаются
+                    genes_exons[gene_id]["total_sum_of_exons"] += f.iv.end - f.iv.start #last in list
 
+                    genes_exons[gene_id]["exons"].append([f.iv.start, f.iv.end])
 
-                    genes_exons[gene_id].append({"coords": [f.interval.start, f.interval.end]})
+                    #genes_exons[gene_id].append({"coords": [f.iv.start, f.iv.end]})
 
                 #10 точек для гена для которых будем считать покрытие(интроны вычтем)
                 #будем считать что экзоны приходят отсортированные, в этом надо будет убедиться!
@@ -271,38 +277,42 @@ def count_reads_in_features(sam_filenames, gff_filename,
             i += 1
             if i % 100000 == 0 and not quiet:
                 sys.stderr.write("%d GFF lines processed.\n" % i)
+
     except:
-        sys.stderr.write(
-            "Error occured when processing GFF file (%s):\n" %
-            gff.get_line_number_string())
+        sys.stderr.write("Error occured when processing GFF file (%s):\n" % gff.get_line_number_string())
         raise
 
 
     if not quiet:
         sys.stderr.write("%d GFF lines processed.\n" % i)
 
-    if len(genes_coverage_in_points) == 0:
-        sys.stderr.write(
-            "Warning: No features of type '%s' found.\n" % feature_type)
+    if len(genes_exons) == 0:
+        sys.stderr.write("Warning: No features of type '%s' found.\n" % feature_type)
 
 
 
     #TODO получаем здесь точки для измерения покрытия уже с учетом интронов! 10 точек в каждом гене
     #TODO подумать как можно улучшить алгоритм, чтобы не держать в памяти для сразу всех генов ряды по 10 точек
 
-    for gene_id, gene in genes_exons:
+
+    #проход по всем генам и внутри каждого сортируем по первой координате экзона
+    #в конце сортировки каждого гена назначаем крайнюю координату начала гена(первый экзон)
+    #пересекающиеся экзоны надо склеивать и расширять границы
+    #после склеивания будем получать сумму экзонов total_sum_of_exons, т.е. мы получим участки непокрытые ни на одном стренде
+
+    for gene_id, gene in genes_exons.iteritems():
         total = gene[0]["total_sum_of_exons"]# длина всех экзонов
 
         for ten_interval in xrange(0,100,10):
             point = (total*ten_interval)/100#точка в абсолютном исчислении
             prev_exon_end = 0
 
-            for exon_key, exon in gene:
+            for exon_key, exon in enumerate(gene):
 
                 #prev_exon_length + exon.start +
-                point += (exon.start - prev_exon_end) #длина интрона
+                point += (exon["coords"][0] - prev_exon_end) #длина интрона
 
-                if (point < exon.end):
+                if (point < exon["coords"][1]):#точка конца экзона
                     #пишем точку в конечный массив
                     genes_coverage_in_points[gene_id][ten_interval] = {"point": point, "coverage": 0}
 
@@ -310,7 +320,7 @@ def count_reads_in_features(sam_filenames, gff_filename,
                 else:
                     #длину экзона не уложившегося записываем
                     #prev_exon_length += exon.end - exon.start
-                    prev_exon_end = exon.end
+                    prev_exon_end = exon["coords"][1]
 
 
 
@@ -501,7 +511,7 @@ def count_reads_in_features(sam_filenames, gff_filename,
 
                                 gene_name = list(fs)[0]# - имя гена
 
-                                check_and_count_points_coverage(gene_name, r[0].iv, r[1].iv)
+                                check_and_count_points_coverage(gene_name, r[0], r[1])
 
 
                             """
