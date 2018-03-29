@@ -272,7 +272,7 @@ def count_reads_in_features(sam_filenames, gff_filename,
                 if (exists(genes_exons, [gene_id]) == None):
                     #координата первого экзона
 
-                    genes_exons[gene_id] = {"total_sum_of_exons": 0, "gene_begin": 0, "exons": list([[f.iv.start, f.iv.end]])}
+                    genes_exons[gene_id] = {"total_sum_of_exons": 0, "total_aligned_reads": 0, "gene_begin": 0, "exons": list([[f.iv.start, f.iv.end]])}
 
                     #genes_exons[gene_id].append({"coords": [f.iv.start, f.iv.end], "total_sum_of_exons": 0, "gene_begin": f.iv.start})
 
@@ -358,6 +358,11 @@ def count_reads_in_features(sam_filenames, gff_filename,
     #notaligned_all = []
     #lowqual_all = []
     #nonunique_all = []
+    sample = 0
+    total_of_reads_in_sample = 0
+
+    colors = ["red", "blue", "green","yellow"]
+
     for isam, (sam_filename) in enumerate(sam_filenames):
         if samouts != '':
             samoutfile = open(samouts[isam], 'w')
@@ -397,6 +402,7 @@ def count_reads_in_features(sam_filenames, gff_filename,
             #nonunique = 0
             i = 0
             for r in read_seq:
+                total_of_reads_in_sample += 1
                 if i > 0 and i % 100000 == 0 and not quiet:
                     sys.stderr.write(
                         "%d SAM alignment record%s processed.\n" %
@@ -532,6 +538,8 @@ def count_reads_in_features(sam_filenames, gff_filename,
 
                                 gene_name = list(fs)[0]# - имя гена
 
+                                genes_exons[gene_name]["total_aligned_reads"] += 1
+
                                 check_and_count_points_coverage(gene_name, r[0], r[1])
 
 
@@ -563,26 +571,74 @@ def count_reads_in_features(sam_filenames, gff_filename,
         if samoutfile is not None:
             samoutfile.close()
 
+        #сохранить данные в таблицы чтобы работать с ними как угодно потом!
 
-        #genes_coverage_in_points[gene_id][half]["coverage"]
+        outfile = open('/home/kirill/bi/transcript/'+sample+'_dict.txt', 'w')
+        for gene_id, gene in genes_coverage_in_points.iteritems():
+            outfile.write("total_of_reads_in_sample" + '\t' + total_of_reads_in_sample + '\n')
+            outfile.write(str(gene_id) + '\t' + genes_exons[gene_id]["total_aligned_reads"] + '\t' + genes_exons[gene_id]["total_sum_of_exons"] + '\n')
 
-        y = np.arange(0, 10, 1)#TODO нормировать, да на количество выровненных ридов на ген,+ можно на длину гена, FPKM?
-        x = np.arange(0, 10, 1)
+            outfile.write(str(gene_id) + '\t')
+            [outfile.write(str(val["coverage"]) + '\t') for val in gene]
+            outfile.write('\n')
 
+        outfile.close()
+
+
+        #1. получить % от числа ридов картированных на ген в конкретной точке(сумма всех % на 10 точках = 100) - число ридов картированных на ген будем записывать в массив(это бывший массиыв count)
+        #2 для каждой точки делим полученный процент на длину конкретного гена (total_sum of exons)
+        #3. для каждой точки делим величину на общее число ридов в образце
+        #4. deviance - min - max всех значений? точка на графике среднее между ними
+
+
+
+        y = np.zeros(10)
+        x = np.arange(0, 100, 10)
+
+
+        most_min = np.zeros(10)
+        most_max = np.zeros(10)
+        j = 0
         for gene_id, gene in genes_coverage_in_points.iteritems():
 
             i = 0
             for val in gene:
-                y[i] += val["coverage"]
-                i +=1
+                c = (((val["coverage"]/genes_exons[gene_id]["total_aligned_reads"])/genes_exons[gene_id]["total_sum_of_exons"])/total_of_reads_in_sample)
 
-        #TODO продумать расчет ошибки!, стандартное отклонение?
-        #TODO можно сложить все значения покрытий, а можно получить среднее
+                y[i] += c
+
+                if (j==0):# первый ген в выборке у каждого из 10
+                    most_min[i] = c
+
+                if (most_max[i] < c):
+                    most_max[i] = c
+                elif(most_min[i] > c):
+                    most_min[i] = c
+
+                i +=1
+            j+=1
+
+
+        y_means = np.zeros(10)
+        i = 0
+        for val in y:
+            y_means[i] = val/genes_coverage_in_points.__len__()
+            i += 1
+
+        y_deviations = np.zeros(10)
+
+        for i in range(0,10,1):
+            y_deviations[i] = most_max[i] - most_min[i]
+
+
         #TODO надо отфильтровать файл с вырвыниваниями, чтобы было меньше работы, нужны только proper_paired без multiple alingment
 
-        plt.errorbar(x, y, yerr=[7, 3, 5, 7, 1], color='red', ls='--', marker='o', capsize=5, capthick=1,ecolor='black')
+        plt.errorbar(x, y_means, yerr=y_deviations, color=colors[sample], ls='--', marker='o', capsize=5, capthick=1, ecolor='black')
 
-        plt.show()
+
+        sample +=1
+
+    plt.show()
 
 
 
