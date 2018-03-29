@@ -526,19 +526,14 @@ def count_reads_in_features(sam_filenames, gff_filename,
                                 #we can take this read into account of analysis
                                 #they must come in sorted order by coordinate!
                                 #this is one unit of analysis. save it in memory and go throught it
-                                """
-                                храним  в памяти границы рида до тех пор пока его их не привысит левая граница очередного рида
-                                
-                                получаем массив с интервалами и покрытием каждого интервала , сначала в абсолютных координатах, потом в % с учетом вычитания интронов - это все храним для 1 гена, желательно делать для точек 10% разницей,
-                                
-                                сложение интервалов между двумя генами(будем складывать только точки в 10%, так проще и экономнее)
-                                
-                                """
-
-
+                               
                                 gene_name = list(fs)[0]# - имя гена
 
                                 genes_exons[gene_name]["total_aligned_reads"] += 1
+
+
+                                if (total_of_reads_in_sample==100000):
+                                   break
 
                                 check_and_count_points_coverage(gene_name, r[0], r[1])
 
@@ -573,10 +568,10 @@ def count_reads_in_features(sam_filenames, gff_filename,
 
         #сохранить данные в таблицы чтобы работать с ними как угодно потом!
 
-        outfile = open('/home/kirill/bi/transcript/'+sample+'_dict.txt', 'w')
+        outfile = open('/home/kirill/bi/transcript/'+str(sample)+'_dict.txt', 'w')
         for gene_id, gene in genes_coverage_in_points.iteritems():
-            outfile.write("total_of_reads_in_sample" + '\t' + total_of_reads_in_sample + '\n')
-            outfile.write(str(gene_id) + '\t' + genes_exons[gene_id]["total_aligned_reads"] + '\t' + genes_exons[gene_id]["total_sum_of_exons"] + '\n')
+            outfile.write("total_of_reads_in_sample" + '\t' + str(total_of_reads_in_sample) + '\n')
+            outfile.write(str(gene_id) + '\t' + str(genes_exons[gene_id]["total_aligned_reads"]) + '\t' + str(genes_exons[gene_id]["total_sum_of_exons"]) + '\n')
 
             outfile.write(str(gene_id) + '\t')
             [outfile.write(str(val["coverage"]) + '\t') for val in gene]
