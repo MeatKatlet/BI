@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+from __future__ import division
 import matplotlib
 matplotlib.use('TkAgg')
 import matplotlib.pyplot as plt
@@ -12,6 +13,7 @@ import HTSeq
 import math
 import numpy as np
 from collections import defaultdict
+
 #import HTSeq.scripts.count  as counts
 
 #HTSeq.
@@ -290,6 +292,7 @@ def count_reads_in_features(sam_filenames, gff_filename,
             i += 1
             if i % 100000 == 0 and not quiet:
                 sys.stderr.write("%d GFF lines processed.\n" % i)
+                break
 
 
     except:
@@ -342,6 +345,7 @@ def count_reads_in_features(sam_filenames, gff_filename,
                     #длину экзона не уложившегося записываем
                     #prev_exon_length += exon.end - exon.start
                     prev_exon_end = exon[1]
+
 
 
 
@@ -574,7 +578,7 @@ def count_reads_in_features(sam_filenames, gff_filename,
             outfile.write(str(gene_id) + '\t' + str(genes_exons[gene_id]["total_aligned_reads"]) + '\t' + str(genes_exons[gene_id]["total_sum_of_exons"]) + '\n')
 
             outfile.write(str(gene_id) + '\t')
-            [outfile.write(str(val["coverage"]) + '\t') for val in gene]
+            [outfile.write(str(val["coverage"]) + '\t') for k, val in gene.iteritems()]
             outfile.write('\n')
 
         outfile.close()
@@ -597,7 +601,10 @@ def count_reads_in_features(sam_filenames, gff_filename,
         for gene_id, gene in genes_coverage_in_points.iteritems():
 
             i = 0
-            for val in gene:
+            if (genes_exons[gene_id]["total_aligned_reads"]==0 or genes_exons[gene_id]["total_sum_of_exons"]==0 or total_of_reads_in_sample==0):
+                continue
+
+            for k, val in gene.iteritems():
                 c = (((val["coverage"]/genes_exons[gene_id]["total_aligned_reads"])/genes_exons[gene_id]["total_sum_of_exons"])/total_of_reads_in_sample)
 
                 y[i] += c
@@ -633,7 +640,9 @@ def count_reads_in_features(sam_filenames, gff_filename,
 
         sample +=1
 
+    plt.savefig('/home/kirill/bi/transcript/covarage.png')
     plt.show()
+    plt.close()
 
 
 
