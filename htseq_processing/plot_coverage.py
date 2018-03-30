@@ -2,6 +2,7 @@
 from __future__ import division
 import matplotlib
 matplotlib.use('TkAgg')
+import matplotlib.patches as mpatches
 import matplotlib.pyplot as plt
 import sys
 import argparse
@@ -13,6 +14,8 @@ import HTSeq
 import math
 import numpy as np
 from collections import defaultdict
+
+
 
 #import HTSeq.scripts.count  as counts
 
@@ -292,7 +295,6 @@ def count_reads_in_features(sam_filenames, gff_filename,
             i += 1
             if i % 100000 == 0 and not quiet:
                 sys.stderr.write("%d GFF lines processed.\n" % i)
-                break
 
 
     except:
@@ -366,6 +368,7 @@ def count_reads_in_features(sam_filenames, gff_filename,
     total_of_reads_in_sample = 0
 
     colors = ["red", "blue", "green","yellow"]
+    handlers = []
 
     for isam, (sam_filename) in enumerate(sam_filenames):
         if samouts != '':
@@ -536,8 +539,8 @@ def count_reads_in_features(sam_filenames, gff_filename,
                                 genes_exons[gene_name]["total_aligned_reads"] += 1
 
 
-                                if (total_of_reads_in_sample==100000):
-                                   break
+                                #if (total_of_reads_in_sample==100000):
+                                #   break
 
                                 check_and_count_points_coverage(gene_name, r[0], r[1])
 
@@ -633,12 +636,22 @@ def count_reads_in_features(sam_filenames, gff_filename,
             y_deviations[i] = most_max[i] - most_min[i]
 
 
-        #TODO надо отфильтровать файл с вырвыниваниями, чтобы было меньше работы, нужны только proper_paired без multiple alingment
+        patch = mpatches.Patch(color=colors[sample])
+        handlers.append(patch)
+
 
         plt.errorbar(x, y_means, yerr=y_deviations, color=colors[sample], ls='--', marker='o', capsize=5, capthick=1, ecolor='black')
 
 
+
         sample +=1
+
+
+    plt.legend(handlers, ['Sample '+str(v) for v in range(0,sample,1)])
+    plt.title('Positions relative coverege')
+    plt.xlabel('5` -> 3` positions, %')
+    plt.ylabel('relative coverage')
+    plt.grid(True)
 
     plt.savefig('/home/kirill/bi/transcript/covarage.png')
     plt.show()
