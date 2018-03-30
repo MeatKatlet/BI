@@ -182,7 +182,21 @@ def count_reads_in_features(sam_filenames, gff_filename,
             elif(fstart>sstart):
             """
 
-        # overlapped
+
+        if (fend < sstart and fstart < fend and sstart < send):
+            check2(gene_id, fstart, fend)
+            check2(gene_id, sstart, send)
+
+        if (send < fstart and fstart < fend and sstart < send):
+            check2(gene_id, fstart, fend)
+            check2(gene_id, sstart, send)
+
+
+        return
+
+
+
+
         if (math.fabs(first_read.inferred_insert_size) == math.fabs(second_read.inferred_insert_size) and first_read.iv.length + second_read.iv.length < math.fabs(first_read.inferred_insert_size)):
             if (fstart <= sstart):
                 check(gene_id, fstart, send)
@@ -224,6 +238,18 @@ def count_reads_in_features(sam_filenames, gff_filename,
             elif (point > start and point < end):  # пересекает
                 genes_coverage_in_points[gene_id][half]["coverage"] += 1
                 return
+
+    def check2(gene_id, start, end):
+
+        for i in range(0,100,10):
+
+            point = genes_coverage_in_points[gene_id][i]["point"]
+
+            if (start < point and point < end):
+                genes_coverage_in_points[gene_id][i]["coverage"] += 1
+                return
+
+
 
     if samouts != "":
         if len(samouts) != len(sam_filenames):
@@ -409,6 +435,7 @@ def count_reads_in_features(sam_filenames, gff_filename,
             #nonunique = 0
             i = 0
             for r in read_seq:
+                #TODO 'NoneType' object has no attribute 'iv' raised in plot_coverage.py:169]
                 total_of_reads_in_sample += 1
                 if i > 0 and i % 100000 == 0 and not quiet:
                     sys.stderr.write(
@@ -510,7 +537,8 @@ def count_reads_in_features(sam_filenames, gff_filename,
                         fs = None
                         for iv in iv_seq:
                             if iv.chrom not in features.chrom_vectors:
-                                raise UnknownChrom
+                                continue
+                                #raise UnknownChrom
                             for iv2, fs2 in features[iv].steps():
                                 if ((len(fs2) > 0) or
                                    (overlap_mode == "intersection-strict")):
