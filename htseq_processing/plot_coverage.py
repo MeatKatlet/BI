@@ -104,50 +104,7 @@ for iv3, fs2 in gas[ HTSeq.GenomicInterval( "chr1", 210, 290, "." ) ].steps():
 
 для большинства ридов 
 """
-
-def work(sam_filename,region,order):
-
-    return 11111
-
-class Bam_region_reader(HTSeq.BAM_Reader):
-
-    def __init__(self, filename,region):
-        self.BAM_Reader = HTSeq.BAM_Reader(filename)
-        self.region = region
-
-    def __iter__(self):
-
-        for almt in self.BAM_Reader.fetch(self.region):
-            yield almt
-
-
-
-
-class UnknownChrom(Exception):
-    pass
-
-
-def invert_strand(iv):
-    iv2 = iv.copy()
-    if iv2.strand == "+":
-        iv2.strand = "-"
-    elif iv2.strand == "-":
-        iv2.strand = "+"
-    else:
-        raise ValueError("Illegal strand")
-    return iv2
-
-##################################################################################################################
-def count_reads_in_features(sam_filenames, gff_filename,
-                            samtype,
-                            order, max_buffer_size,
-                            stranded, overlap_mode,
-                            multimapped_mode,
-                            secondary_alignment_mode,
-                            supplementary_alignment_mode,
-                            feature_type, id_attribute,
-                            additional_attributes,
-                            quiet, minaqual, samouts):
+class Counter():
 
     def exists(obj, chain):
         _key = chain.pop(0)
@@ -493,6 +450,53 @@ def count_reads_in_features(sam_filenames, gff_filename,
             j += 1
 
         return
+
+
+def work(sam_filename,region,order):
+
+    return 11111
+
+class Bam_region_reader(HTSeq.BAM_Reader):
+
+    def __init__(self, filename,region):
+        self.BAM_Reader = HTSeq.BAM_Reader(filename)
+        self.region = region
+
+    def __iter__(self):
+
+        for almt in self.BAM_Reader.fetch(self.region):
+            yield almt
+
+
+
+
+class UnknownChrom(Exception):
+    pass
+
+
+def invert_strand(iv):
+    iv2 = iv.copy()
+    if iv2.strand == "+":
+        iv2.strand = "-"
+    elif iv2.strand == "-":
+        iv2.strand = "+"
+    else:
+        raise ValueError("Illegal strand")
+    return iv2
+
+##################################################################################################################
+def count_reads_in_features(sam_filenames, gff_filename,
+                            samtype,
+                            order, max_buffer_size,
+                            stranded, overlap_mode,
+                            multimapped_mode,
+                            secondary_alignment_mode,
+                            supplementary_alignment_mode,
+                            feature_type, id_attribute,
+                            additional_attributes,
+                            quiet, minaqual, samouts):
+
+
 
     if samouts != "":
         if len(samouts) != len(sam_filenames):
