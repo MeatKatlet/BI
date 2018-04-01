@@ -14,7 +14,7 @@ import HTSeq
 import math
 import numpy as np
 from collections import defaultdict
-
+from time import gmtime, strftime
 
 
 #import HTSeq.scripts.count  as counts
@@ -163,6 +163,8 @@ def count_reads_in_features(sam_filenames, gff_filename,
 
         # определить какую из точек пересекает
         # вычесть из каждой координаты координату начала гена!
+        if (first_read is None or second_read is None):
+            return
 
         gene_begin = genes_exons[gene_id]["gene_begin"]
 
@@ -172,39 +174,42 @@ def count_reads_in_features(sam_filenames, gff_filename,
         send = second_read.iv.end - gene_begin
 
 
+
+
+
+
         if (first_read.proper_pair == False or second_read.proper_pair == False):
             return
-            """
-            if (fstart <= sstart and fend > sstart):#пересекаются конец первого начало второго
 
-            elif(fstart>sstart and send > fstart):#пересекаются конец первого начало второго
+        #######test###############
+        if (gene_id == "ENSG00000000003.10" and first_read.iv.start > test_first_exon_start):
 
-            elif(fstart>sstart):
-            """
+            if (first_read.iv.start > test_first_exon_start and second_read.iv.start > test_first_exon_start and first_read.iv.end < test_last_exon_end and second_read.iv.end < test_last_exon_end):
+                cvg[first_read.iv] += 1
+                cvg[second_read.iv] += 1
+                test_n[0] += 1
+        ######################
 
 
         if (fend < sstart and fstart < fend and sstart < send):
             check2(gene_id, fstart, fend)
             check2(gene_id, sstart, send)
 
-        if (send < fstart and fstart < fend and sstart < send):
+        elif (send < fstart and fstart < fend and sstart < send):
             check2(gene_id, fstart, fend)
             check2(gene_id, sstart, send)
 
+        elif (fstart < fend and sstart < send and sstart >= fstart and send >= fend and sstart <= fend):
+            check2(gene_id, fstart, send)
 
-        return
+        elif (fstart < fend and sstart < send and sstart <= fstart and send >= fstart and send <= fend):
+            check2(gene_id, sstart, fend)
 
+        elif (fstart < sstart and send < fend):
+            check2(gene_id, fstart, fend)
+        elif (sstart < fstart  and fend < send):
+            check2(gene_id, sstart, send)
 
-
-
-        if (math.fabs(first_read.inferred_insert_size) == math.fabs(second_read.inferred_insert_size) and first_read.iv.length + second_read.iv.length < math.fabs(first_read.inferred_insert_size)):
-            if (fstart <= sstart):
-                check(gene_id, fstart, send)
-            elif (sstart <= fstart):
-                check(gene_id, sstart, fend)
-        else:
-            check(gene_id, fstart, fend)
-            check(gene_id, sstart, send)
 
     def check(gene_id, start, end):
         total = 100
@@ -240,14 +245,20 @@ def count_reads_in_features(sam_filenames, gff_filename,
                 return
 
     def check2(gene_id, start, end):
-
+        gene_begin = genes_exons[gene_id]["gene_begin"]
         for i in range(0,100,10):
 
-            point = genes_coverage_in_points[gene_id][i]["point"]
+            point = genes_coverage_in_points[gene_id][i]["point"]-gene_begin
 
             if (start < point and point < end):
                 genes_coverage_in_points[gene_id][i]["coverage"] += 1
                 return
+
+    def clear_all_cov_points():
+        for gene_id, gene in genes_coverage_in_points.iteritems():
+
+            for k, val in gene.iteritems():
+                val["coverage"] = 0
 
 
 
@@ -277,7 +288,10 @@ def count_reads_in_features(sam_filenames, gff_filename,
     #genes_exons = {}
 
     genes_exons = defaultdict(dict)
-    i = 0
+
+    cvg = HTSeq.GenomicArrayOfSets("auto", stranded != "no")
+    test_n = [0]
+    i= 0
 
     try:
         for f in gff:
@@ -374,6 +388,26 @@ def count_reads_in_features(sam_filenames, gff_filename,
                     #prev_exon_length += exon.end - exon.start
                     prev_exon_end = exon[1]
 
+    ##########################start test#################
+    test_begin = genes_exons["ENSG00000000003.10"]["gene_begin"]
+    test_first_exon_start = genes_exons["ENSG00000000003.10"]["exons"][0][0]
+    last = len(genes_exons["ENSG00000000003.10"]["exons"]) - 1
+
+    test_last_exon_end = genes_exons["ENSG00000000003.10"]["exons"][last][1]
+
+
+    sys.stderr.write("ENSG00000000003.10 gene_begin: " + str(test_begin)+"\n")
+    sys.stderr.write("ENSG00000000003.10 0 exon start: " + str(test_first_exon_start)+"\n")
+
+    sys.stderr.write("ENSG00000000003.10 last exon end(end of gene): " + str(test_last_exon_end)+"\n")
+
+
+    if(test_begin != test_first_exon_start):
+        sys.stderr.write("not_equal!!!!!!\n")
+
+
+    ###########################end test######################
+
 
 
 
@@ -391,12 +425,15 @@ def count_reads_in_features(sam_filenames, gff_filename,
     #lowqual_all = []
     #nonunique_all = []
     sample = 0
-    total_of_reads_in_sample = 0
+
 
     colors = ["red", "blue", "green","yellow"]
     handlers = []
-
+    sys.stderr.write(strftime("%Y-%m-%d %H:%M:%S", gmtime()) + "\n")
     for isam, (sam_filename) in enumerate(sam_filenames):
+
+        total_of_reads_in_sample = 0
+
         if samouts != '':
             samoutfile = open(samouts[isam], 'w')
         else:
@@ -441,7 +478,7 @@ def count_reads_in_features(sam_filenames, gff_filename,
                     sys.stderr.write(
                         "%d SAM alignment record%s processed.\n" %
                         (i, "s" if not pe_mode else " pairs"))
-
+                    sys.stderr.write(strftime("%Y-%m-%d %H:%M:%S", gmtime()) + "\n")
                 i += 1
                 if not pe_mode:
                     if not r.aligned:
@@ -603,9 +640,22 @@ def count_reads_in_features(sam_filenames, gff_filename,
 
         #сохранить данные в таблицы чтобы работать с ними как угодно потом!
 
+        #############test################
+        sys.stderr.write("ENSG00000000003.10 genes on: "+str(test_n[0])+"\n")
+        #TODO ошибка, не рисует график!!!
+        plt.plot(list(cvg[HTSeq.GenomicInterval("chrX", test_first_exon_start, test_last_exon_end, "+")]))
+        plt.show()
+        plt.plot(list(cvg[HTSeq.GenomicInterval("chrX", test_first_exon_start, test_last_exon_end, "-")]))
+
+        plt.show()
+        return
+        ################################
+
+
         outfile = open('/home/kirill/bi/transcript/'+str(sample)+'_dict.txt', 'w')
+        outfile.write("total_of_reads_in_sample" + '\t' + str(total_of_reads_in_sample) + '\n')
         for gene_id, gene in genes_coverage_in_points.iteritems():
-            outfile.write("total_of_reads_in_sample" + '\t' + str(total_of_reads_in_sample) + '\n')
+
             outfile.write(str(gene_id) + '\t' + str(genes_exons[gene_id]["total_aligned_reads"]) + '\t' + str(genes_exons[gene_id]["total_sum_of_exons"]) + '\n')
 
             outfile.write(str(gene_id) + '\t')
@@ -621,6 +671,8 @@ def count_reads_in_features(sam_filenames, gff_filename,
         #4. deviance - min - max всех значений? точка на графике среднее между ними
 
 
+
+        #TODO обнулять покрытие между файлами/образцами!!
 
         y = np.zeros(10)
         x = np.arange(0, 100, 10)
@@ -667,12 +719,15 @@ def count_reads_in_features(sam_filenames, gff_filename,
         patch = mpatches.Patch(color=colors[sample])
         handlers.append(patch)
 
-
+        #будет создан 1 график с четырьмя линиями!
         plt.errorbar(x, y_means, yerr=y_deviations, color=colors[sample], ls='--', marker='o', capsize=5, capthick=1, ecolor='black')
 
 
 
         sample +=1
+
+        #обнуление точек покрытия
+        clear_all_cov_points()
 
 
     plt.legend(handlers, ['Sample '+str(v) for v in range(0,sample,1)])
