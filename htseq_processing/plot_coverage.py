@@ -14,7 +14,9 @@ import HTSeq
 import math
 import numpy as np
 from collections import defaultdict
-from time import gmtime, strftime
+from multiprocessing import Pool
+import multiprocessing as mp
+
 
 
 #import HTSeq.scripts.count  as counts
@@ -102,32 +104,7 @@ for iv3, fs2 in gas[ HTSeq.GenomicInterval( "chr1", 210, 290, "." ) ].steps():
 
 для большинства ридов 
 """
-
-class UnknownChrom(Exception):
-    pass
-
-
-def invert_strand(iv):
-    iv2 = iv.copy()
-    if iv2.strand == "+":
-        iv2.strand = "-"
-    elif iv2.strand == "-":
-        iv2.strand = "+"
-    else:
-        raise ValueError("Illegal strand")
-    return iv2
-
-##################################################################################################################
-def count_reads_in_features(sam_filenames, gff_filename,
-                            samtype,
-                            order, max_buffer_size,
-                            stranded, overlap_mode,
-                            multimapped_mode,
-                            secondary_alignment_mode,
-                            supplementary_alignment_mode,
-                            feature_type, id_attribute,
-                            additional_attributes,
-                            quiet, minaqual, samouts):
+class Counter():
 
     def exists(obj, chain):
         _key = chain.pop(0)
@@ -163,8 +140,6 @@ def count_reads_in_features(sam_filenames, gff_filename,
 
         # определить какую из точек пересекает
         # вычесть из каждой координаты координату начала гена!
-        if (first_read is None or second_read is None):
-            return
 
         gene_begin = genes_exons[gene_id]["gene_begin"]
 
@@ -174,42 +149,39 @@ def count_reads_in_features(sam_filenames, gff_filename,
         send = second_read.iv.end - gene_begin
 
 
-
-
-
-
         if (first_read.proper_pair == False or second_read.proper_pair == False):
             return
+            """
+            if (fstart <= sstart and fend > sstart):#пересекаются конец первого начало второго
 
-        #######test###############
-        if (gene_id == "ENSG00000000003.10" and first_read.iv.start > test_first_exon_start):
+            elif(fstart>sstart and send > fstart):#пересекаются конец первого начало второго
 
-            if (first_read.iv.start > test_first_exon_start and second_read.iv.start > test_first_exon_start and first_read.iv.end < test_last_exon_end and second_read.iv.end < test_last_exon_end):
-                cvg[first_read.iv] += 1
-                cvg[second_read.iv] += 1
-                test_n[0] += 1
-        ######################
+            elif(fstart>sstart):
+            """
 
 
         if (fend < sstart and fstart < fend and sstart < send):
             check2(gene_id, fstart, fend)
             check2(gene_id, sstart, send)
 
-        elif (send < fstart and fstart < fend and sstart < send):
+        if (send < fstart and fstart < fend and sstart < send):
             check2(gene_id, fstart, fend)
             check2(gene_id, sstart, send)
 
-        elif (fstart < fend and sstart < send and sstart >= fstart and send >= fend and sstart <= fend):
-            check2(gene_id, fstart, send)
 
-        elif (fstart < fend and sstart < send and sstart <= fstart and send >= fstart and send <= fend):
-            check2(gene_id, sstart, fend)
+        return
 
-        elif (fstart < sstart and send < fend):
-            check2(gene_id, fstart, fend)
-        elif (sstart < fstart  and fend < send):
-            check2(gene_id, sstart, send)
 
+
+
+        if (math.fabs(first_read.inferred_insert_size) == math.fabs(second_read.inferred_insert_size) and first_read.iv.length + second_read.iv.length < math.fabs(first_read.inferred_insert_size)):
+            if (fstart <= sstart):
+                check(gene_id, fstart, send)
+            elif (sstart <= fstart):
+                check(gene_id, sstart, fend)
+        else:
+            check(gene_id, fstart, fend)
+            check(gene_id, sstart, send)
 
     def check(gene_id, start, end):
         total = 100
@@ -245,20 +217,284 @@ def count_reads_in_features(sam_filenames, gff_filename,
                 return
 
     def check2(gene_id, start, end):
-        gene_begin = genes_exons[gene_id]["gene_begin"]
+
         for i in range(0,100,10):
 
-            point = genes_coverage_in_points[gene_id][i]["point"]-gene_begin
+            point = genes_coverage_in_points[gene_id][i]["point"]
 
             if (start < point and point < end):
                 genes_coverage_in_points[gene_id][i]["coverage"] += 1
                 return
 
-    def clear_all_cov_points():
-        for gene_id, gene in genes_coverage_in_points.iteritems():
+    def worker2(sam_filename,region,order):
+        #такой worker будет возвращать посчитаную статистику по хромосоме, статистика всех workeroв будет суммироваться во вне
+        #Bam_region_reader(sam_filename,region)
+        #genes_coverage_in_points надо передавать?
+        try:
+            if sam_filename != "-":
+                read_seq_file = Bam_region_reader(sam_filename,region)#SAM_or_BAM_Reader(sam_filename)
+                read_seq = read_seq_file
+                first_read = next(iter(read_seq))
+            else:
+                read_seq_file = Bam_region_reader(sam_filename,region)#SAM_or_BAM_Reader(sys.stdin)
+                read_seq_iter = iter(read_seq_file)
+                first_read = next(read_seq_iter)
+                read_seq = itertools.chain([first_read], read_seq_iter)
+            pe_mode = first_read.paired_end
+        except:
+            sys.stderr.write(
+                "Error occured when reading beginning of SAM/BAM file.\n")
+            raise
+
+        try:
+            if pe_mode:
+                if order == "name":
+                    read_seq = HTSeq.pair_SAM_alignments(read_seq)
+                elif order == "pos":
+                    read_seq = HTSeq.pair_SAM_alignments_with_buffer(
+                        read_seq,
+                        max_buffer_size=max_buffer_size)
+                else:
+                    raise ValueError("Illegal order specified.")
+            # empty = 0
+            # ambiguous = 0
+            notaligned = 0
+            lowqual = 0
+            # nonunique = 0
+            i = 0
+            total_of_reads_in_sample = 0#TODO из-за паралельности это не правильно, надо будет подумать как это считать!!!!
+            for r in read_seq:
+                # TODO 'NoneType' object has no attribute 'iv' raised in plot_coverage.py:169]
+                if r is None or r[0] is None or r[1] is None:
+                    break
+
+                total_of_reads_in_sample += 1
+                if i > 0 and i % 100000 == 0 and not quiet:
+                    sys.stderr.write(
+                        "%d SAM alignment record%s processed.\n" %
+                        (i, "s" if not pe_mode else " pairs"))
+
+                i += 1
+                if not pe_mode:
+                    if not r.aligned:
+                        # notaligned += 1
+                        # write_to_samout(r, "__not_aligned", samoutfile)
+                        continue
+                    if ((secondary_alignment_mode == 'ignore') and
+                            r.not_primary_alignment):
+                        continue
+                    if ((supplementary_alignment_mode == 'ignore') and
+                            r.supplementary):
+                        continue
+                    try:
+                        if r.optional_field("NH") > 1:
+                            # nonunique += 1
+                            # write_to_samout(r, "__alignment_not_unique", samoutfile)
+                            if multimapped_mode == 'none':
+                                continue
+                    except KeyError:
+                        pass
+                    if r.aQual < minaqual:
+                        lowqual += 1
+                        # write_to_samout(r, "__too_low_aQual", samoutfile)
+                        continue
+                    if stranded != "reverse":
+                        iv_seq = (co.ref_iv for co in r.cigar if co.type ==
+                                  "M" and co.size > 0)
+                    else:
+                        iv_seq = (invert_strand(co.ref_iv)
+                                  for co in r.cigar if (co.type in com and
+                                                        co.size > 0))
+                else:
+                    if r[0] is not None and r[0].aligned:
+                        if stranded != "reverse":
+                            iv_seq = (co.ref_iv for co in r[0].cigar
+                                      if co.type in com and co.size > 0)
+                        else:
+                            iv_seq = (invert_strand(co.ref_iv) for co in r[0].cigar
+                                      if co.type in com and co.size > 0)
+                    else:
+                        iv_seq = tuple()
+                    if r[1] is not None and r[1].aligned:
+                        if stranded != "reverse":
+                            iv_seq = itertools.chain(
+                                iv_seq,
+                                (invert_strand(co.ref_iv) for co in r[1].cigar
+                                 if co.type in com and co.size > 0))
+                        else:
+                            iv_seq = itertools.chain(
+                                iv_seq,
+                                (co.ref_iv for co in r[1].cigar
+                                 if co.type in com and co.size > 0))
+                    else:
+                        if (r[0] is None) or not (r[0].aligned):
+                            # write_to_samout(r, "__not_aligned", samoutfile)
+                            # notaligned += 1
+                            continue
+                    if secondary_alignment_mode == 'ignore':
+                        if (r[0] is not None) and r[0].not_primary_alignment:
+                            continue
+                        elif (r[1] is not None) and r[1].not_primary_alignment:
+                            continue
+                    if supplementary_alignment_mode == 'ignore':
+                        if (r[0] is not None) and r[0].supplementary:
+                            continue
+                        elif (r[1] is not None) and r[1].supplementary:
+                            continue
+                    try:
+                        if ((r[0] is not None and r[0].optional_field("NH") > 1) or
+                                (r[1] is not None and r[1].optional_field("NH") > 1)):
+                            # nonunique += 1
+                            # write_to_samout(r, "__alignment_not_unique", samoutfile)
+                            if multimapped_mode == 'none':
+                                continue
+                    except KeyError:
+                        pass
+                    if ((r[0] and r[0].aQual < minaqual) or
+                            (r[1] and r[1].aQual < minaqual)):
+                        lowqual += 1
+                        # write_to_samout(r, "__too_low_aQual", samoutfile)
+                        continue
+
+                try:
+                    if overlap_mode == "union":
+                        fs = set()
+                        for iv in iv_seq:
+                            if iv.chrom not in features.chrom_vectors:
+                                raise UnknownChrom
+                            for iv2, fs2 in features[iv].steps():
+                                fs = fs.union(fs2)
+                    elif overlap_mode in ("intersection-strict",
+                                          "intersection-nonempty"):
+                        fs = None
+                        for iv in iv_seq:
+                            if iv.chrom not in features.chrom_vectors:
+                                continue
+                                # raise UnknownChrom
+                            for iv2, fs2 in features[iv].steps():
+                                if ((len(fs2) > 0) or
+                                        (overlap_mode == "intersection-strict")):
+                                    if fs is None:
+                                        fs = fs2.copy()
+                                    else:
+                                        fs = fs.intersection(fs2)
+                    else:
+                        sys.exit("Illegal overlap mode.")
+
+                    if fs is not None and len(fs) > 0:
+                        if multimapped_mode == 'none':
+                            if len(fs) == 1:
+                                # counts[list(fs)[0]] += 1
+                                # read mapped only for one exon, (all cigar parts of both reads in pair mapped on one gene, but may be for several exons)
+                                # we can take this read into account of analysis
+                                # they must come in sorted order by coordinate!
+                                # this is one unit of analysis. save it in memory and go throught it
+
+                                gene_name = list(fs)[0]  # - имя гена
+
+                                genes_exons[gene_name]["total_aligned_reads"] += 1
+
+                                # if (total_of_reads_in_sample==100000):
+                                #   break
+
+                                check_and_count_points_coverage(gene_name, r[0], r[1])
+
+                            """
+                            elif multimapped_mode == 'all':
+                                for fsi in list(fs):
+                                    #counts[fsi] += 1 
+                            """
+                        else:
+                            sys.exit("Illegal multimap mode.")
+
+
+                except UnknownChrom:
+                    # write_to_samout(r, "__no_feature", samoutfile)
+                    # empty += 1
+                    raise
+
+        except:
+            sys.stderr.write(
+                "Error occured when processing SAM input (%s):\n" %
+                read_seq_file.get_line_number_string())
+            raise
+
+        most_min = np.zeros(10)  # это будет выдаваться из workera
+        most_max = np.zeros(10)  # это будет выдаваться из workera
+        j = 0
+
+
+
+        for gene_id, gene in genes_coverage_in_points.iteritems():  # по всем генам в регионе
+
+            i = 0
+            if (genes_exons[gene_id]["total_aligned_reads"] == 0 or genes_exons[gene_id][
+                "total_sum_of_exons"] == 0 or total_of_reads_in_sample == 0):
+                continue
 
             for k, val in gene.iteritems():
-                val["coverage"] = 0
+                c = (((val["coverage"] / genes_exons[gene_id]["total_aligned_reads"]) / genes_exons[gene_id][
+                    "total_sum_of_exons"]) / total_of_reads_in_sample)
+
+                y[i] += c  # это будет выдаваться из workera
+
+                if (j == 0):  # первый ген в выборке у каждого из 10
+                    most_min[i] = c
+
+                if (most_max[i] < c):
+                    most_max[i] = c
+                elif (most_min[i] > c):
+                    most_min[i] = c
+
+                i += 1
+            j += 1
+
+        return
+
+
+def work(sam_filename,region,order):
+
+    return 11111
+
+class Bam_region_reader(HTSeq.BAM_Reader):
+
+    def __init__(self, filename,region):
+        self.BAM_Reader = HTSeq.BAM_Reader(filename)
+        self.region = region
+
+    def __iter__(self):
+
+        for almt in self.BAM_Reader.fetch(self.region):
+            yield almt
+
+
+
+
+class UnknownChrom(Exception):
+    pass
+
+
+def invert_strand(iv):
+    iv2 = iv.copy()
+    if iv2.strand == "+":
+        iv2.strand = "-"
+    elif iv2.strand == "-":
+        iv2.strand = "+"
+    else:
+        raise ValueError("Illegal strand")
+    return iv2
+
+##################################################################################################################
+def count_reads_in_features(sam_filenames, gff_filename,
+                            samtype,
+                            order, max_buffer_size,
+                            stranded, overlap_mode,
+                            multimapped_mode,
+                            secondary_alignment_mode,
+                            supplementary_alignment_mode,
+                            feature_type, id_attribute,
+                            additional_attributes,
+                            quiet, minaqual, samouts):
 
 
 
@@ -288,10 +524,7 @@ def count_reads_in_features(sam_filenames, gff_filename,
     #genes_exons = {}
 
     genes_exons = defaultdict(dict)
-
-    cvg = HTSeq.GenomicArrayOfSets("auto", stranded != "no")
-    test_n = [0]
-    i= 0
+    i = 0
 
     try:
         for f in gff:
@@ -335,7 +568,7 @@ def count_reads_in_features(sam_filenames, gff_filename,
             i += 1
             if i % 100000 == 0 and not quiet:
                 sys.stderr.write("%d GFF lines processed.\n" % i)
-
+                break
 
     except:
         sys.stderr.write("Error occured when processing GFF file (%s):\n" % gff.get_line_number_string())
@@ -388,26 +621,6 @@ def count_reads_in_features(sam_filenames, gff_filename,
                     #prev_exon_length += exon.end - exon.start
                     prev_exon_end = exon[1]
 
-    ##########################start test#################
-    test_begin = genes_exons["ENSG00000000003.10"]["gene_begin"]
-    test_first_exon_start = genes_exons["ENSG00000000003.10"]["exons"][0][0]
-    last = len(genes_exons["ENSG00000000003.10"]["exons"]) - 1
-
-    test_last_exon_end = genes_exons["ENSG00000000003.10"]["exons"][last][1]
-
-
-    sys.stderr.write("ENSG00000000003.10 gene_begin: " + str(test_begin)+"\n")
-    sys.stderr.write("ENSG00000000003.10 0 exon start: " + str(test_first_exon_start)+"\n")
-
-    sys.stderr.write("ENSG00000000003.10 last exon end(end of gene): " + str(test_last_exon_end)+"\n")
-
-
-    if(test_begin != test_first_exon_start):
-        sys.stderr.write("not_equal!!!!!!\n")
-
-
-    ###########################end test######################
-
 
 
 
@@ -425,237 +638,70 @@ def count_reads_in_features(sam_filenames, gff_filename,
     #lowqual_all = []
     #nonunique_all = []
     sample = 0
-
+    total_of_reads_in_sample = 0
 
     colors = ["red", "blue", "green","yellow"]
     handlers = []
-    sys.stderr.write(strftime("%Y-%m-%d %H:%M:%S", gmtime()) + "\n")
+
+
+    pool = Pool(processes=4)
+
+    #TASKS = ["chr1","chr2","chr3","chr4","chr5","chr6","chr7","chr8","chr9","chr10"]
+    TASKS = ["chr"+str(chr) for chr in range(1,23,1)]
+    #получить полный список из референса?
+
+
     for isam, (sam_filename) in enumerate(sam_filenames):
-
-        total_of_reads_in_sample = 0
-
         if samouts != '':
             samoutfile = open(samouts[isam], 'w')
         else:
             samoutfile = None
 
-        try:
-            if sam_filename != "-":
-                read_seq_file = SAM_or_BAM_Reader(sam_filename)
-                read_seq = read_seq_file
-                first_read = next(iter(read_seq))
-            else:
-                read_seq_file = SAM_or_BAM_Reader(sys.stdin)
-                read_seq_iter = iter(read_seq_file)
-                first_read = next(read_seq_iter)
-                read_seq = itertools.chain([first_read], read_seq_iter)
-            pe_mode = first_read.paired_end
-        except:
-            sys.stderr.write(
-                "Error occured when reading beginning of SAM/BAM file.\n")
-            raise
 
-        try:
-            if pe_mode:
-                if order == "name":
-                    read_seq = HTSeq.pair_SAM_alignments(read_seq)
-                elif order == "pos":
-                    read_seq = HTSeq.pair_SAM_alignments_with_buffer(
-                            read_seq,
-                            max_buffer_size=max_buffer_size)
-                else:
-                    raise ValueError("Illegal order specified.")
-            #empty = 0
-            #ambiguous = 0
-            notaligned = 0
-            lowqual = 0
-            #nonunique = 0
+        tt = []
+
+        for chr in TASKS:
+
+            tt.append((sam_filename,chr,order))
+
+
+        #paralell mode
+        #TODO правильно передать все аргументы
+        #TODO распечатку текущего выполнения правильно сделать
+        results = [pool.apply_async(work, region) for region in tt]
+        #TODO вернуть количество обработанных пар из каждого воркера!
+        #worker(sam_filenames)
+        #будет возвращать вектор с точками покрытия по всем генам этого региона 0-100 с шагом 10
+        y = np.zeros(10)
+        for r in results:#1 вектор
             i = 0
-            for r in read_seq:
-                #TODO 'NoneType' object has no attribute 'iv' raised in plot_coverage.py:169]
-                total_of_reads_in_sample += 1
-                if i > 0 and i % 100000 == 0 and not quiet:
-                    sys.stderr.write(
-                        "%d SAM alignment record%s processed.\n" %
-                        (i, "s" if not pe_mode else " pairs"))
-                    sys.stderr.write(strftime("%Y-%m-%d %H:%M:%S", gmtime()) + "\n")
-                i += 1
-                if not pe_mode:
-                    if not r.aligned:
-                        #notaligned += 1
-                        #write_to_samout(r, "__not_aligned", samoutfile)
-                        continue
-                    if ((secondary_alignment_mode == 'ignore') and
-                       r.not_primary_alignment):
-                        continue
-                    if ((supplementary_alignment_mode == 'ignore') and
-                       r.supplementary):
-                        continue
-                    try:
-                        if r.optional_field("NH") > 1:
-                            #nonunique += 1
-                            #write_to_samout(r, "__alignment_not_unique", samoutfile)
-                            if multimapped_mode == 'none':
-                                continue
-                    except KeyError:
-                        pass
-                    if r.aQual < minaqual:
-                        lowqual += 1
-                        #write_to_samout(r, "__too_low_aQual", samoutfile)
-                        continue
-                    if stranded != "reverse":
-                        iv_seq = (co.ref_iv for co in r.cigar if co.type ==
-                                  "M" and co.size > 0)
-                    else:
-                        iv_seq = (invert_strand(co.ref_iv)
-                                  for co in r.cigar if (co.type in com and
-                                                        co.size > 0))
-                else:
-                    if r[0] is not None and r[0].aligned:
-                        if stranded != "reverse":
-                            iv_seq = (co.ref_iv for co in r[0].cigar
-                                      if co.type in com and co.size > 0)
-                        else:
-                            iv_seq = (invert_strand(co.ref_iv) for co in r[0].cigar
-                                      if co.type in com and co.size > 0)
-                    else:
-                        iv_seq = tuple()
-                    if r[1] is not None and r[1].aligned:
-                        if stranded != "reverse":
-                            iv_seq = itertools.chain(
-                                    iv_seq,
-                                    (invert_strand(co.ref_iv) for co in r[1].cigar
-                                    if co.type in com and co.size > 0))
-                        else:
-                            iv_seq = itertools.chain(
-                                    iv_seq,
-                                    (co.ref_iv for co in r[1].cigar
-                                     if co.type in com and co.size > 0))
-                    else:
-                        if (r[0] is None) or not (r[0].aligned):
-                            #write_to_samout(r, "__not_aligned", samoutfile)
-                            #notaligned += 1
-                            continue
-                    if secondary_alignment_mode == 'ignore':
-                        if (r[0] is not None) and r[0].not_primary_alignment:
-                            continue
-                        elif (r[1] is not None) and r[1].not_primary_alignment:
-                            continue
-                    if supplementary_alignment_mode == 'ignore':
-                        if (r[0] is not None) and r[0].supplementary:
-                            continue
-                        elif (r[1] is not None) and r[1].supplementary:
-                            continue
-                    try:
-                        if ((r[0] is not None and r[0].optional_field("NH") > 1) or
-                           (r[1] is not None and r[1].optional_field("NH") > 1)):
-                            #nonunique += 1
-                            #write_to_samout(r, "__alignment_not_unique", samoutfile)
-                            if multimapped_mode == 'none':
-                                continue
-                    except KeyError:
-                        pass
-                    if ((r[0] and r[0].aQual < minaqual) or
-                       (r[1] and r[1].aQual < minaqual)):
-                        lowqual += 1
-                        #write_to_samout(r, "__too_low_aQual", samoutfile)
-                        continue
-
-                try:
-                    if overlap_mode == "union":
-                        fs = set()
-                        for iv in iv_seq:
-                            if iv.chrom not in features.chrom_vectors:
-                                raise UnknownChrom
-                            for iv2, fs2 in features[iv].steps():
-                                fs = fs.union(fs2)
-                    elif overlap_mode in ("intersection-strict",
-                                          "intersection-nonempty"):
-                        fs = None
-                        for iv in iv_seq:
-                            if iv.chrom not in features.chrom_vectors:
-                                continue
-                                #raise UnknownChrom
-                            for iv2, fs2 in features[iv].steps():
-                                if ((len(fs2) > 0) or
-                                   (overlap_mode == "intersection-strict")):
-                                    if fs is None:
-                                        fs = fs2.copy()
-                                    else:
-                                        fs = fs.intersection(fs2)
-                    else:
-                        sys.exit("Illegal overlap mode.")
+            for point in r:
+                y[i]+=point
+                i+=10
+            #print '\t', r.get()
+        #
+        pool.join()#ждем пока все процессы не завершатся
 
 
-
-
-
-                    if fs is not None and len(fs) > 0:
-                        if multimapped_mode == 'none':
-                            if len(fs) == 1:
-                                #counts[list(fs)[0]] += 1
-                                #read mapped only for one exon, (all cigar parts of both reads in pair mapped on one gene, but may be for several exons)
-                                #we can take this read into account of analysis
-                                #they must come in sorted order by coordinate!
-                                #this is one unit of analysis. save it in memory and go throught it
-                               
-                                gene_name = list(fs)[0]# - имя гена
-
-                                genes_exons[gene_name]["total_aligned_reads"] += 1
-
-
-                                #if (total_of_reads_in_sample==100000):
-                                #   break
-
-                                check_and_count_points_coverage(gene_name, r[0], r[1])
-
-
-                            """
-                            elif multimapped_mode == 'all':
-                                for fsi in list(fs):
-                                    #counts[fsi] += 1 
-                            """
-                        else:
-                            sys.exit("Illegal multimap mode.")
-
-
-                except UnknownChrom:
-                    #write_to_samout(r, "__no_feature", samoutfile)
-                    #empty += 1
-                    raise
-
-        except:
-            sys.stderr.write(
-                "Error occured when processing SAM input (%s):\n" %
-                read_seq_file.get_line_number_string())
-            raise
-
+        """
         if not quiet:
             sys.stderr.write(
                 "%d SAM %s processed.\n" %
                 (i, "alignments " if not pe_mode else "alignment pairs"))
+        """
+
+
 
         if samoutfile is not None:
             samoutfile.close()
 
         #сохранить данные в таблицы чтобы работать с ними как угодно потом!
 
-        #############test################
-        sys.stderr.write("ENSG00000000003.10 genes on: "+str(test_n[0])+"\n")
-        #TODO ошибка, не рисует график!!!
-        plt.plot(list(cvg[HTSeq.GenomicInterval("chrX", test_first_exon_start, test_last_exon_end, "+")]))
-        plt.show()
-        plt.plot(list(cvg[HTSeq.GenomicInterval("chrX", test_first_exon_start, test_last_exon_end, "-")]))
-
-        plt.show()
-        return
-        ################################
-
-
+        #TODO будет ли genes_coverage_in_points заполнена в воркерах?
+        """
         outfile = open('/home/kirill/bi/transcript/'+str(sample)+'_dict.txt', 'w')
-        outfile.write("total_of_reads_in_sample" + '\t' + str(total_of_reads_in_sample) + '\n')
         for gene_id, gene in genes_coverage_in_points.iteritems():
-
+            outfile.write("total_of_reads_in_sample" + '\t' + str(total_of_reads_in_sample) + '\n')
             outfile.write(str(gene_id) + '\t' + str(genes_exons[gene_id]["total_aligned_reads"]) + '\t' + str(genes_exons[gene_id]["total_sum_of_exons"]) + '\n')
 
             outfile.write(str(gene_id) + '\t')
@@ -663,6 +709,9 @@ def count_reads_in_features(sam_filenames, gff_filename,
             outfile.write('\n')
 
         outfile.close()
+        
+        """
+
 
 
         #1. получить % от числа ридов картированных на ген в конкретной точке(сумма всех % на 10 точках = 100) - число ридов картированных на ген будем записывать в массив(это бывший массиыв count)
@@ -670,18 +719,17 @@ def count_reads_in_features(sam_filenames, gff_filename,
         #3. для каждой точки делим величину на общее число ридов в образце
         #4. deviance - min - max всех значений? точка на графике среднее между ними
 
-
-
-        #TODO обнулять покрытие между файлами/образцами!!
-
-        y = np.zeros(10)
         x = np.arange(0, 100, 10)
 
 
-        most_min = np.zeros(10)
-        most_max = np.zeros(10)
+        #TODO доделать потом!
+        """
+        y = np.zeros(10)
+        
+        most_min = np.zeros(10)#это будет выдаваться из workera
+        most_max = np.zeros(10)#это будет выдаваться из workera
         j = 0
-        for gene_id, gene in genes_coverage_in_points.iteritems():
+        for gene_id, gene in genes_coverage_in_points.iteritems():#по всем генам в регионе
 
             i = 0
             if (genes_exons[gene_id]["total_aligned_reads"]==0 or genes_exons[gene_id]["total_sum_of_exons"]==0 or total_of_reads_in_sample==0):
@@ -690,7 +738,7 @@ def count_reads_in_features(sam_filenames, gff_filename,
             for k, val in gene.iteritems():
                 c = (((val["coverage"]/genes_exons[gene_id]["total_aligned_reads"])/genes_exons[gene_id]["total_sum_of_exons"])/total_of_reads_in_sample)
 
-                y[i] += c
+                y[i] += c#это будет выдаваться из workera
 
                 if (j==0):# первый ген в выборке у каждого из 10
                     most_min[i] = c
@@ -702,8 +750,11 @@ def count_reads_in_features(sam_filenames, gff_filename,
 
                 i +=1
             j+=1
+        
+        """
 
 
+        """
         y_means = np.zeros(10)
         i = 0
         for val in y:
@@ -719,16 +770,13 @@ def count_reads_in_features(sam_filenames, gff_filename,
         patch = mpatches.Patch(color=colors[sample])
         handlers.append(patch)
 
-        #будет создан 1 график с четырьмя линиями!
+
         plt.errorbar(x, y_means, yerr=y_deviations, color=colors[sample], ls='--', marker='o', capsize=5, capthick=1, ecolor='black')
-
-
+        """
 
         sample +=1
 
-        #обнуление точек покрытия
-        clear_all_cov_points()
-
+    pool.close()
 
     plt.legend(handlers, ['Sample '+str(v) for v in range(0,sample,1)])
     plt.title('Positions relative coverege')
