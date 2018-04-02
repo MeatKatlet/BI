@@ -1,4 +1,4 @@
-
+# -*- coding: utf-8 -*-
 class FileProcessing:
 
     def __init__(self, path,fp):
@@ -32,7 +32,7 @@ class FileProcessing:
 class FileProcessing_by_chars(FileProcessing):
 
     def process_file(self):
-        с = ""
+        c = ""
         try:
             with open(self.file_path, 'r') as f:
                 while True:
