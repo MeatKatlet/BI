@@ -173,21 +173,19 @@ def count_reads_in_features(sam_filenames, gff_filename,
         sstart = second_read.iv.start - gene_begin
         send = second_read.iv.end - gene_begin
 
-
-
-
-
-
         if (first_read.proper_pair == False or second_read.proper_pair == False):
             return
 
         #######test###############
+        """
         if (gene_id == "ENSG00000000003.10" and first_read.iv.start > test_first_exon_start):
 
             if (first_read.iv.start > test_first_exon_start and second_read.iv.start > test_first_exon_start and first_read.iv.end < test_last_exon_end and second_read.iv.end < test_last_exon_end):
                 cvg[first_read.iv] += 1
                 cvg[second_read.iv] += 1
                 test_n[0] += 1
+        
+        """
         ######################
 
 
@@ -245,10 +243,10 @@ def count_reads_in_features(sam_filenames, gff_filename,
                 return
 
     def check2(gene_id, start, end):
-        gene_begin = genes_exons[gene_id]["gene_begin"]
+        #gene_begin = genes_exons[gene_id]["gene_begin"]
         for i in range(0,100,10):
 
-            point = genes_coverage_in_points[gene_id][i]["point"]-gene_begin
+            point = genes_coverage_in_points[gene_id][i]["point"]
 
             if (start < point and point < end):
                 genes_coverage_in_points[gene_id][i]["coverage"] += 1
@@ -259,6 +257,29 @@ def count_reads_in_features(sam_filenames, gff_filename,
 
             for k, val in gene.iteritems():
                 val["coverage"] = 0
+
+
+    def plot_gene_coverage():
+        sys.stderr.write("ENSG00000000003.10 genes on: " + str(test_n[0]) + "\n")
+        x = []
+        y = []
+
+        i = 0
+        for k, val in enumerate(list(cvg[HTSeq.GenomicInterval("chrX", test_first_exon_start, test_last_exon_end)])):
+            x.append(i)
+            y.append(val)
+            i += 1
+        plt.plot(x, y)
+        plt.show()
+        """
+         iv = HTSeq.GenomicInterval("chr3", 100, 200, "+")
+        cvg[iv] += 1
+        iv = HTSeq.GenomicInterval("chr3", 150, 250, "-")
+        cvg[iv] += 1
+        
+
+        
+        """
 
 
 
@@ -288,8 +309,10 @@ def count_reads_in_features(sam_filenames, gff_filename,
     #genes_exons = {}
 
     genes_exons = defaultdict(dict)
+    #cvg = HTSeq.GenomicArray("auto", stranded != "no")
 
-    cvg = HTSeq.GenomicArrayOfSets("auto", stranded != "no")
+
+
     test_n = [0]
     i= 0
 
@@ -380,7 +403,7 @@ def count_reads_in_features(sam_filenames, gff_filename,
 
                 if (point < exon[1]): #точка конца экзона
                     #пишем точку в конечный массив
-                    genes_coverage_in_points[gene_id][ten_interval] = {"point": point, "coverage": 0}
+                    genes_coverage_in_points[gene_id][ten_interval] = {"point": point-gene["gene_begin"], "coverage": 0}
 
                     break# переход на следующую точку 10%
                 else:
@@ -388,6 +411,8 @@ def count_reads_in_features(sam_filenames, gff_filename,
                     #prev_exon_length += exon.end - exon.start
                     prev_exon_end = exon[1]
 
+
+    """
     ##########################start test#################
     test_begin = genes_exons["ENSG00000000003.10"]["gene_begin"]
     test_first_exon_start = genes_exons["ENSG00000000003.10"]["exons"][0][0]
@@ -404,7 +429,8 @@ def count_reads_in_features(sam_filenames, gff_filename,
 
     if(test_begin != test_first_exon_start):
         sys.stderr.write("not_equal!!!!!!\n")
-
+    
+    """
 
     ###########################end test######################
 
@@ -587,9 +613,6 @@ def count_reads_in_features(sam_filenames, gff_filename,
                         sys.exit("Illegal overlap mode.")
 
 
-
-
-
                     if fs is not None and len(fs) > 0:
                         if multimapped_mode == 'none':
                             if len(fs) == 1:
@@ -640,16 +663,7 @@ def count_reads_in_features(sam_filenames, gff_filename,
 
         #сохранить данные в таблицы чтобы работать с ними как угодно потом!
 
-        #############test################
-        sys.stderr.write("ENSG00000000003.10 genes on: "+str(test_n[0])+"\n")
-        #TODO ошибка, не рисует график!!!
-        plt.plot(list(cvg[HTSeq.GenomicInterval("chrX", test_first_exon_start, test_last_exon_end, "+")]))
-        plt.show()
-        plt.plot(list(cvg[HTSeq.GenomicInterval("chrX", test_first_exon_start, test_last_exon_end, "-")]))
 
-        plt.show()
-        return
-        ################################
 
 
         outfile = open('/home/kirill/bi/transcript/'+str(sample)+'_dict.txt', 'w')
@@ -664,6 +678,12 @@ def count_reads_in_features(sam_filenames, gff_filename,
 
         outfile.close()
 
+        #############test################
+
+        #plot_gene_coverage()
+
+
+        ################################
 
         #1. получить % от числа ридов картированных на ген в конкретной точке(сумма всех % на 10 точках = 100) - число ридов картированных на ген будем записывать в массив(это бывший массиыв count)
         #2 для каждой точки делим полученный процент на длину конкретного гена (total_sum of exons)
