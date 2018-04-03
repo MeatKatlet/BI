@@ -56,14 +56,15 @@ class CoverageFileProcessor:
 os.chdir("/home/kirill/bi/transcript/coverage/")
 
 
-fp = CoverageFileProcessor()
+
 
 sample = 0
 colors = ["red", "blue", "green","yellow"]
 handlers = []
 
 #прочтет все файлы в папке
-for i in range(0,3,1):
+for i in range(0,4,1):
+    fp = CoverageFileProcessor()
     file_path = str(i)+"_dict.txt"
     processor = FileProcessing(file_path, fp)
     processor.process_file()
@@ -113,7 +114,7 @@ for i in range(0,3,1):
     y_means = np.zeros(10)
     i = 0
     for val in y:
-        y_means[i] = val / total_genes
+        y_means[i] = float(val) / total_genes
         i += 1
 
     #(каждый x в выборке на 10 % линии - среднее)^2 / количество генов, корень из этого
@@ -137,7 +138,7 @@ for i in range(0,3,1):
             i += 1
 
     for i in range(0, 10, 1):
-        ss2[i] = math.sqrt(float(ss[i]/total_genes))
+        ss2[i] = math.sqrt(float(ss[i])/total_genes)
 
 
     """
@@ -149,6 +150,10 @@ for i in range(0,3,1):
 
     patch = mpatches.Patch(color=colors[sample])
     handlers.append(patch)
+
+    y_means = y_means*(10**12)
+    ss2 = ss2 * (10**12)
+
 
     # будет создан 1 график с четырьмя линиями!
     plt.errorbar(x, y_means, yerr=ss2, color=colors[sample], ls='--', marker='o', capsize=5, capthick=1,ecolor='black')
