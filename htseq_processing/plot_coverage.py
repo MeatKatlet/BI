@@ -139,16 +139,19 @@ def count_reads_in_features(sam_filenames, gff_filename,
         rightmost_value = gene["exons"][0][1]
         start = gene["exons"][0][0]
         new_exons = []
-        total = 0
+        total = rightmost_value - start
         for interval in gene["exons"]:
 
             if (interval[0] <= rightmost_value and interval[1] >= rightmost_value):
 
+                total += (interval[1]-rightmost_value)
                 rightmost_value = interval[1]
 
+
             elif (interval[0] > rightmost_value):
-                new_exons.append([start, rightmost_value])
-                total += (rightmost_value - start)
+                total += (interval[1] - interval[0])
+                new_exons.append([start, rightmost_value])#add previous extended interval to result
+
                 start = interval[0]
                 rightmost_value = interval[1]
 

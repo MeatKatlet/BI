@@ -66,24 +66,48 @@ class CoverageFileProcessor2:
 os.chdir("/home/kirill/bi/transcript/coverage/")
 #положить все файлы в 1 папку
 
-fp = CoverageFileProcessor1()
 
-samples = []
+
+samples = list()
 
 #get raw coverage in samples
-for i in range(0,3,1):
+for i in range(0,4,1):
+    fp = CoverageFileProcessor2()
     file_path = str(i)+"_dict.txt"
     processor = FileProcessing(file_path, fp)
     processor.process_file()
 
-    samples[i] = fp.genes_coverage
+    x = np.zeros(fp.genes_exons.__len__())
 
-fp = CoverageFileProcessor2()
+    samples.append(fp)
 
-samples2 = []
+    i2 = 0
+    max = 0
+    for k, j in samples[i].genes_exons.iteritems():
+        if (j["total_aligned_reads"]>0):
+            x[i2] = j["total_aligned_reads"]
+            i2 += 1
+            if(j["total_aligned_reads"] > max):
+                max=j["total_aligned_reads"]
+
+
+    plt.hist(x, bins=100)
+
+    plt.xlabel('Smarts')
+    plt.ylabel('Probability')
+    plt.title('Histogram of IQ')
+
+
+    plt.grid(True)
+    plt.show()
+
+
+
+samples2 = list()
 #we need genes lengths for normalization
-for i in range(0,3,1):
-    file_path  str(i)+"_dict.txt"
+for i in range(0,4,1):
+    fp = CoverageFileProcessor1()
+    file_path = str(i)+"_coverage.txt"
     processor = FileProcessing(file_path, fp)
     processor.process_file()
 
@@ -92,12 +116,12 @@ for i in range(0,3,1):
 
 genes_coverage_norm = []
 
-for i in range(0,3,1):
+for i in range(0,4,1):
 
     genes_coverage_norm[i] = defaultdict(dict)
 
-    for gene_id, gene in samples[i].iteritems():
-        genes_coverage_norm[i][gene_id] = (float(gene)/float(samples2[i].genes_exons[gene_id]["total_sum_of_exons"]))/float(samples2[i].total_reads_in_sample)
+    for gene_id, gene in samples2[i].genes_coverage.iteritems():
+        genes_coverage_norm[i][gene_id] = (float(gene)/float(samples[i].genes_exons[gene_id]["total_sum_of_exons"]))/float(samples[i].total_reads_in_sample)
 
 
 
@@ -105,9 +129,9 @@ for i in range(0,3,1):
 #todo hist of normcoverage?, for each gene, need log normalization
 
 
-запись в файл нормализованных данных, для каждого образца отдельно!
+#запись в файл нормализованных данных, для каждого образца отдельно!
 
-далее будем работать с ними для коэффициентов корреляции, и остального анализа!
+#далее будем работать с ними для коэффициентов корреляции, и остального анализа!
 
 
 
