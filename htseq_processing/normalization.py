@@ -78,24 +78,20 @@ for i in range(0,4,1):
     processor.process_file()
 
     x = np.zeros(fp.genes_exons.__len__())
+    x2 = []
 
     samples.append(fp)
 
     i2 = 0
-    max = 0
+
     for k, j in samples[i].genes_exons.iteritems():
         if (j["total_aligned_reads"]>0):
             x[i2] = j["total_aligned_reads"]
             i2 += 1
-            if(j["total_aligned_reads"] > max):
-                max=j["total_aligned_reads"]
+            x2.append(j["total_aligned_reads"])
 
-
-    plt.hist(x, bins=100)
-
-    plt.xlabel('Smarts')
-    plt.ylabel('Probability')
-    plt.title('Histogram of IQ')
+    xp = np.arange(i2)
+    plt.bar(xp, height=x2)
 
 
     plt.grid(True)
