@@ -75,16 +75,21 @@ for i in range(0,3,1):
 
     #можно делать график для одного образца
     #TODO можно будет засунуть в функцию и подключить из файла обработчика данных!
+    #TODO как это все делать в numpy
+    #TODO убрать из анализа гены с 0 покрытием, делить на количество генов с ненулевым общим покрытием, за размах будем брать 0 если он минимум и максимум
+    #TODO среднеквадратичное отклонение делать надо а не max min
     y = np.zeros(10)
     x = np.arange(0, 100, 10)
 
     most_min = np.zeros(10)
     most_max = np.zeros(10)
     j = 0
+    total_genes = genes_coverage_in_points.__len__()
     for gene_id, gene in genes_coverage_in_points.iteritems():
 
         i = 0
         if (genes_exons[gene_id]["total_aligned_reads"] == 0 or genes_exons[gene_id]["total_sum_of_exons"] == 0 or total_of_reads_in_sample == 0):
+            total_genes-=1
             continue
         #10**11
         first_not_zero = np.zeros(10)
@@ -108,20 +113,45 @@ for i in range(0,3,1):
     y_means = np.zeros(10)
     i = 0
     for val in y:
-        y_means[i] = val / genes_coverage_in_points.__len__() # это должны быть число генов на котор
+        y_means[i] = val / total_genes
         i += 1
 
+    #(каждый x в выборке на 10 % линии - среднее)^2 / количество генов, корень из этого
+    ss = np.zeros(10)
+    ss2 = np.zeros(10)
+
+    for gene_id, gene in genes_coverage_in_points.iteritems():
+
+        i = 0
+        if (genes_exons[gene_id]["total_aligned_reads"] == 0 or genes_exons[gene_id]["total_sum_of_exons"] == 0 or total_of_reads_in_sample == 0):
+
+            continue
+        #10**11
+        first_not_zero = np.zeros(10)
+        for k, val in gene.iteritems():
+            c = (((float(val["coverage"]) / float(genes_exons[gene_id]["total_aligned_reads"])) / float(genes_exons[gene_id]["total_sum_of_exons"])) / float(total_of_reads_in_sample))
+
+            ss[i] += (c-y_means[i])**2
+
+
+            i += 1
+
+    for i in range(0, 10, 1):
+        ss2[i] = math.sqrt(float(ss[i]/total_genes))
+
+
+    """
     y_deviations = np.zeros(10)
 
     for i in range(0, 10, 1):
         y_deviations[i] = most_max[i] - most_min[i]
+    """
 
     patch = mpatches.Patch(color=colors[sample])
     handlers.append(patch)
-    #TODO что делать и как сравнивать среднее покрытие между образцами, учитывать ли непокрытые гены вообще?, тут нужен не максимум и минимум а среднеквадратичное отклонение
+
     # будет создан 1 график с четырьмя линиями!
-    plt.errorbar(x, y_means, yerr=y_deviations, color=colors[sample], ls='--', marker='o', capsize=5, capthick=1,
-                 ecolor='black')
+    plt.errorbar(x, y_means, yerr=ss2, color=colors[sample], ls='--', marker='o', capsize=5, capthick=1,ecolor='black')
 
     sample += 1
 
