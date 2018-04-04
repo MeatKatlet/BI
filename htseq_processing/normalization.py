@@ -91,7 +91,9 @@ for i in range(0,4,1):
             x2.append(j["total_aligned_reads"])
 
     xp = np.arange(i2)
-    plt.bar(xp, height=x2)
+    #plt.bar(xp, height=x2)
+    x2.sort(reverse=True)
+    plt.plot(xp,x2)
 
 
     plt.grid(True)
