@@ -15,7 +15,7 @@ import math
 import numpy as np
 from collections import defaultdict
 from time import gmtime, strftime
-
+from calc_coverage import CalcCoverage
 
 #import HTSeq.scripts.count  as counts
 
@@ -179,37 +179,26 @@ def count_reads_in_features(sam_filenames, gff_filename,
         if (first_read.proper_pair == False or second_read.proper_pair == False):
             return
 
-        #######test###############
-        """
-        if (gene_id == "ENSG00000000003.10" and first_read.iv.start > test_first_exon_start):
-
-            if (first_read.iv.start > test_first_exon_start and second_read.iv.start > test_first_exon_start and first_read.iv.end < test_last_exon_end and second_read.iv.end < test_last_exon_end):
-                cvg[first_read.iv] += 1
-                cvg[second_read.iv] += 1
-                test_n[0] += 1
-        
-        """
-        ######################
 
 
         if (fend < sstart and fstart < fend and sstart < send):
-            check2(gene_id, fstart, fend)
-            check2(gene_id, sstart, send)
+            check(gene_id, fstart, fend)
+            check(gene_id, sstart, send)
 
         elif (send < fstart and fstart < fend and sstart < send):
-            check2(gene_id, fstart, fend)
-            check2(gene_id, sstart, send)
+            check(gene_id, fstart, fend)
+            check(gene_id, sstart, send)
 
         elif (fstart < fend and sstart < send and sstart >= fstart and send >= fend and sstart <= fend):
-            check2(gene_id, fstart, send)
+            check(gene_id, fstart, send)
 
         elif (fstart < fend and sstart < send and sstart <= fstart and send >= fstart and send <= fend):
-            check2(gene_id, sstart, fend)
+            check(gene_id, sstart, fend)
 
         elif (fstart < sstart and send < fend):
-            check2(gene_id, fstart, fend)
+            check(gene_id, fstart, fend)
         elif (sstart < fstart  and fend < send):
-            check2(gene_id, sstart, send)
+            check(gene_id, sstart, send)
 
 
     def check(gene_id, start, end):
@@ -217,33 +206,46 @@ def count_reads_in_features(sam_filenames, gff_filename,
         half = total / 2
         left_interval = right_interval = half
 
-        while (left_interval >= 10):
+        try:
+            i = 0
+            while (left_interval >= 10):
+                if (i>10):
+                    raise ValueError('Out of boundaries\n')
 
-            if (exists(genes_coverage_in_points, [gene_id, half]) == None):  # если точки нет то ищем ближаишую слева
-                #half = math.ceil(half)
-                half = int(math.floor(half / 10) * 10)
-                point = genes_coverage_in_points[gene_id][half]["point"]
-                right_interval += 5
-                left_interval -= 5
-
-
-            else:  # если точка есть,
-                point = genes_coverage_in_points[gene_id][half]["point"]
-
-            if (point < start):  # слева точка от рида, рид справой строны
-
-                half = half + (right_interval / 2)
-                left_interval = right_interval = right_interval / 2
-
-            elif (point > end):  # точка справа от рида, рид слевой стороны
-
-                half = half - (left_interval / 2)
-                left_interval = right_interval = left_interval / 2
+                if (exists(genes_coverage_in_points, [gene_id, half]) == None):  # если точки нет то ищем ближаишую слева
+                    # half = math.ceil(half)
+                    half = int(math.floor(half / 10) * 10)
+                    point = genes_coverage_in_points[gene_id][half]["point"]
+                    right_interval += 5
+                    left_interval -= 5
 
 
-            elif (point > start and point < end):  # пересекает
-                genes_coverage_in_points[gene_id][half]["coverage"] += 1
-                return
+                else:  # если точка есть,
+                    point = genes_coverage_in_points[gene_id][half]["point"]
+
+                if (point < start):  # слева точка от рида, рид справой строны
+
+                    half = half + (right_interval / 2)
+                    left_interval = right_interval = right_interval / 2
+
+                elif (point > end):  # точка справа от рида, рид слевой стороны
+
+                    half = half - (left_interval / 2)
+                    left_interval = right_interval = left_interval / 2
+
+
+                elif (point > start and point < end):  # пересекает
+                    genes_coverage_in_points[gene_id][half]["coverage"] += 1
+                    return
+                i+=1
+
+        except:
+            sys.stderr.write("Out of boundaries\n")
+
+
+
+
+
 
     def check2(gene_id, start, end):
         #gene_begin = genes_exons[gene_id]["gene_begin"]
@@ -335,25 +337,21 @@ def count_reads_in_features(sam_filenames, gff_filename,
 
                 #counts[f.attr[id_attribute]] = 0
 
-                #TODO экзоны не в порядке сортировки! координат
+                #экзоны не в порядке сортировки! координат
                 #ген - граница экзона
                 #здесь будут все интервалы и сумма всех интервалов
                 gene_id = feature_id #f.attr[id_attribute]
-                #if (count(genes_exons[gene_id])==0):
+
                 if (exists(genes_exons, [gene_id]) == None):
                     #координата первого экзона
 
                     genes_exons[gene_id] = {"total_sum_of_exons": 0, "total_aligned_reads": 0, "gene_begin": 0, "exons": list([[f.iv.start, f.iv.end]])}
 
-                    #genes_exons[gene_id].append({"coords": [f.iv.start, f.iv.end], "total_sum_of_exons": 0, "gene_begin": f.iv.start})
 
                 else :
 
-                    #genes_exons[gene_id]["total_sum_of_exons"] += f.iv.end - f.iv.start #last in list
-
                     genes_exons[gene_id]["exons"].append([f.iv.start, f.iv.end])
 
-                    #genes_exons[gene_id].append({"coords": [f.iv.start, f.iv.end]})
 
                 #10 точек для гена для которых будем считать покрытие(интроны вычтем)
 
@@ -376,7 +374,7 @@ def count_reads_in_features(sam_filenames, gff_filename,
 
 
 
-    #TODO подумать как можно улучшить алгоритм, чтобы не держать в памяти для сразу всех генов ряды по 10 точек
+
 
 
     #проход по всем генам и внутри каждого сортируем по первой координате экзона
@@ -389,8 +387,8 @@ def count_reads_in_features(sam_filenames, gff_filename,
 
         gene["exons"].sort() #by first member
         gene["gene_begin"] = gene["exons"][0][0]
-        #TODO слить все пересекающиеся экзоны и одновременно посчитать сумму длин без полученных промежутков
 
+        #слить все пересекающиеся экзоны и одновременно посчитать сумму длин без полученных промежутков
         check_overlapped_exons_and_calc_sum(gene)
 
         total = gene["total_sum_of_exons"] # длина всех экзонов
@@ -415,30 +413,6 @@ def count_reads_in_features(sam_filenames, gff_filename,
                     prev_exon_end = exon[1]
 
 
-    """
-    ##########################start test#################
-    test_begin = genes_exons["ENSG00000000003.10"]["gene_begin"]
-    test_first_exon_start = genes_exons["ENSG00000000003.10"]["exons"][0][0]
-    last = len(genes_exons["ENSG00000000003.10"]["exons"]) - 1
-
-    test_last_exon_end = genes_exons["ENSG00000000003.10"]["exons"][last][1]
-
-
-    sys.stderr.write("ENSG00000000003.10 gene_begin: " + str(test_begin)+"\n")
-    sys.stderr.write("ENSG00000000003.10 0 exon start: " + str(test_first_exon_start)+"\n")
-
-    sys.stderr.write("ENSG00000000003.10 last exon end(end of gene): " + str(test_last_exon_end)+"\n")
-
-
-    if(test_begin != test_first_exon_start):
-        sys.stderr.write("not_equal!!!!!!\n")
-    
-    """
-
-    ###########################end test######################
-
-
-
 
     if samtype == "sam":
         SAM_or_BAM_Reader = HTSeq.SAM_Reader
@@ -447,12 +421,7 @@ def count_reads_in_features(sam_filenames, gff_filename,
     else:
         raise ValueError("Unknown input format %s specified." % samtype)
 
-    #counts_all = []
-    #empty_all = []
-    #ambiguous_all = []
-    #notaligned_all = []
-    #lowqual_all = []
-    #nonunique_all = []
+
     sample = 0
 
 
@@ -494,11 +463,10 @@ def count_reads_in_features(sam_filenames, gff_filename,
                             max_buffer_size=max_buffer_size)
                 else:
                     raise ValueError("Illegal order specified.")
-            #empty = 0
-            #ambiguous = 0
+
             notaligned = 0
             lowqual = 0
-            #nonunique = 0
+
             i = 0
             for r in read_seq:
                 #TODO 'NoneType' object has no attribute 'iv' raised in plot_coverage.py:169]
@@ -693,59 +661,7 @@ def count_reads_in_features(sam_filenames, gff_filename,
         #3. для каждой точки делим величину на общее число ридов в образце
         #4. deviance - min - max всех значений? точка на графике среднее между ними
 
-
-
-        #TODO обнулять покрытие между файлами/образцами!!
-
-        y = np.zeros(10)
-        x = np.arange(0, 100, 10)
-
-
-        most_min = np.zeros(10)
-        most_max = np.zeros(10)
-        j = 0
-        for gene_id, gene in genes_coverage_in_points.iteritems():
-
-            i = 0
-            if (genes_exons[gene_id]["total_aligned_reads"]==0 or genes_exons[gene_id]["total_sum_of_exons"]==0 or total_of_reads_in_sample==0):
-                continue
-
-            for k, val in gene.iteritems():
-                c = (((val["coverage"]/genes_exons[gene_id]["total_aligned_reads"])/genes_exons[gene_id]["total_sum_of_exons"])/total_of_reads_in_sample)
-
-                y[i] += c
-
-                if (j==0):# первый ген в выборке у каждого из 10
-                    most_min[i] = c
-
-                if (most_max[i] < c):
-                    most_max[i] = c
-                elif(most_min[i] > c):
-                    most_min[i] = c
-
-                i +=1
-            j+=1
-
-
-        y_means = np.zeros(10)
-        i = 0
-        for val in y:
-            y_means[i] = val/genes_coverage_in_points.__len__()
-            i += 1
-
-        y_deviations = np.zeros(10)
-
-        for i in range(0,10,1):
-            y_deviations[i] = most_max[i] - most_min[i]
-
-
-        patch = mpatches.Patch(color=colors[sample])
-        handlers.append(patch)
-
-        #будет создан 1 график с четырьмя линиями!
-        plt.errorbar(x, y_means, yerr=y_deviations, color=colors[sample], ls='--', marker='o', capsize=5, capthick=1, ecolor='black')
-
-
+        CalcCoverage.do_coverage(genes_coverage_in_points, genes_exons, total_of_reads_in_sample, colors, sample, handlers)
 
         sample +=1
 

@@ -21,7 +21,6 @@ from calc_coverage import CalcCoverage
 
 
 
-#TODO оформить в модуль!
 class CoverageFileProcessor:
 
     def __init__(self):
@@ -75,11 +74,7 @@ for i in range(0,4,1):
     genes_exons = fp.genes_exons
 
 
-    #можно делать график для одного образца
-    #TODO можно будет засунуть в функцию и подключить из файла обработчика данных!
-    #TODO как это все делать в numpy
-    #TODO убрать из анализа гены с 0 покрытием, делить на количество генов с ненулевым общим покрытием, за размах будем брать 0 если он минимум и максимум
-    #TODO среднеквадратичное отклонение делать надо а не max min
+    #делать график для одного образца
     CalcCoverage.do_coverage(genes_coverage_in_points,genes_exons,total_of_reads_in_sample,colors,sample,handlers)
 
     sample += 1
