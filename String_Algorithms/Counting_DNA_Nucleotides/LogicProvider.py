@@ -97,7 +97,7 @@ class ParalellLogicProvider(LinesLogicProvider):
 
 
     def parallell_method(self, line):
-        # TODO распаралеливание строки на части! в памяти
+        #распаралеливание строки на части! в памяти
         # т.е. каждую строку в памяти паралельно!
         # middle = floor(len(line)/2);
 

@@ -1,14 +1,4 @@
 
-
-#TODO тесты на свой код, использовать фреймворк для этого!
-#профилировщик для кода найти, чтобы определять что работает быстро а что нет - это внутри ide
-#TODO инструменты для памяти какие есть?
-
-#надо все задачи делать с расчетом на большие данные!,(большие файлы) не помещающиеся в оперативную память
-
-
-#будет внедряться нужный класс конфигурации и внем будет конкретная логика по работе со строкой
-
 from common.files import FileProcessing, FileProcessing_by_chars
 
 from String_Algorithms.Counting_DNA_Nucleotides.DNAFileProcessor import DNAFileProcessor
@@ -25,7 +15,7 @@ if __name__ == '__main__':
     dp = DataProvider
     lines_logic_provider = LinesLogicProvider
     fp = DNAFileProcessor(dp,lines_logic_provider)
-    processor = FileProcessing(file_path, fp)# построчно читает большой файл, без загрузки всего файла в память todo проверить это на большом файле
+    processor = FileProcessing(file_path, fp)# построчно читает большой файл, без загрузки всего файла в память
     #*********write to file*******************************************
 
     if os.path.exists(file_path)==False:

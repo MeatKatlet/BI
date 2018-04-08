@@ -19,3 +19,7 @@ python2.7 /home/kirill/bi/BI/htseq_processing/plot_coverage.py \
 \htseq_processing\merge_data_and_plot.py
 
 merge txt files, produced by plot_coverage.py and plot all them on one plot
+
+
+\String_Algorithms\Counting_DNA_Nucleotides\main.py - count nucliotides in different ways, process data by lines, 
+by chars, and parallel reading of line
