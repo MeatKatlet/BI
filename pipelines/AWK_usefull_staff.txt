@@ -1,0 +1,65 @@
+awk '/^>/ { # header pattern detected
+        if (seqlen){
+         # print previous seqlen if exists 
+         print seqlen
+         }
+
+         # pring the tag 
+
+         printf "@SQ    SN:%s   LN:", substr($1,2)
+
+
+         # initialize sequence
+         seqlen = 0
+
+         # skip further processing
+         next
+      }
+
+# accumulate sequence length
+{
+seqlen += length($0)
+}
+# remnant seqlen if exists
+END{if(seqlen){print seqlen}}' /home/kirill/bi/assembly/spades/first_run/mapping/reference_1_contig_reads_mapping/sorted_aligned_contigs.fasta > SAMheaders.txt
+
+
+удаление дубликатов
+
+awk '!x[$0]++' SAMheaders.txt > SAMheaders_unique.txt
+
+достаем нужную хромосому
+awk '/^>/ { # header pattern detected
+
+        if (begin_read_contig) {
+            exit
+        }
+        #print $0
+        
+
+        if ($0 == ">chr8") {
+            first=1
+            begin_read_contig=1
+            
+        }
+
+        
+      }
+    {
+        
+        if (begin_read_contig) {
+        
+            if (first) {
+                printf "%s\n", $1
+                first=0
+                
+            }
+            else {
+                print $0
+            }
+            
+        }
+
+
+    }
+' /home/kirill/bi/mapping/hg19.fasta > 8_crom_reference.fasta

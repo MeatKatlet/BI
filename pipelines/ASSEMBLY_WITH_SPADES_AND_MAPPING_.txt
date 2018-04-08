@@ -1,0 +1,96 @@
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+ /usr/bin/python3 /usr/local/bin/SPAdes-3.10.1-Linux/bin/spades.py \
+ --pe1-1 /home/kirill/bi/assembly/spades/first_run/trimmed/reads_1.trimmed.fastq --pe1-2 /home/kirill/bi/assembly/spades/first_run/trimmed/reads_2.trimmed.fastq \
+ --only-assembler  \
+ -o /home/kirill/bi/assembly/spades/first_run/result
+ 
+////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+/usr/bin/python3 /usr/local/bin/quast-4.6.3/quast.py \
+/home/kirill/bi/assembly/spades/first_run/result/scaffolds.fasta \
+-R /home/kirill/bi/assembly/spades/first_run/NC_002505.fna \
+-G /home/kirill/bi/assembly/spades/first_run/NC_002505.gff \
+-o /home/kirill/bi/assembly/spades/first_run/quast_result \
+--threads 4 \
+--no-check \
+--no-gzip
+
+///////////////////////////////////////////////////////////////////////////////////////
+/usr/bin/python3 /usr/local/bin/quast-4.6.3/quast.py \
+/home/kirill/bi/assembly/spades/first_run/result/contigs.fasta \
+-R /home/kirill/bi/assembly/spades/first_run/NC_002505.fna \
+-G /home/kirill/bi/assembly/spades/first_run/NC_002505.gff \
+-o /home/kirill/bi/assembly/spades/first_run/quast_result2 \
+--threads 4 \
+--no-check \
+--no-gzip
+
+////////////////////////////////////////////////////////////////////////////////
+/usr/bin/python3 /usr/local/bin/quast-4.6.3/quast.py \
+/usr/local/bin/quast-4.6.3/test_data/contigs_1.fasta \
+/usr/local/bin/quast-4.6.3/test_data/contigs_2.fasta \
+-R /usr/local/bin/quast-4.6.3/test_data/reference.fasta.gz \
+-G /usr/local/bin/quast-4.6.3/test_data/genes.gff \
+-o /home/kirill/bi/assembly/spades/first_run/quast_result3 \
+--threads 4 
+
+/////////////////////////////////////////////////////////////////
+/usr/bin/python3 /usr/local/bin/quast-4.6.3/quast.py \
+/usr/local/bin/quast-4.6.3/test_data/contigs_1.fasta \
+/usr/local/bin/quast-4.6.3/test_data/contigs_2.fasta \
+-R /usr/local/bin/quast-4.6.3/test_data/reference.fasta.gz \
+-G /usr/local/bin/quast-4.6.3/test_data/genes.gff \
+-o /home/kirill/bi/assembly/spades/first_run/quast_result4 \
+--threads 4 
+
+
+///////////////////////////////////////////////////////////////////////////////////
+
+/usr/bin/python3 /usr/local/bin/quast-4.6.3/quast.py \
+/home/kirill/bi/assembly/spades/first_run/result/contigs.fasta \
+-R /home/kirill/bi/assembly/spades/first_run/sequence.fasta \
+-G /home/kirill/bi/assembly/spades/first_run/GCF_000006745.1_ASM674v1_genomic.gff \
+-o /home/kirill/bi/assembly/spades/first_run/quast_new_result \
+--threads 4 
+/////////////////////////////////////////////////////////////////////////////
+
+параметры взяты из quast
+
+sudo nucmer -c 65 -l 65 --maxmatch \
+--sam-long=/home/kirill/bi/assembly/spades/first_run/quast_new_result3/contigs.sam \
+/home/kirill/bi/assembly/spades/first_run/sequence.fasta /home/kirill/bi/assembly/spades/first_run/result/contigs.fasta
+
+//////////////////////////////////////////////////////////////////////////
+
+
+
+mapping
+
+
+index
+
+sudo /usr/bin/python3 /usr/local/bin/bowtie2/bowtie2-build sequence.fasta,sequence2.fasta Vicilus
+
+mapping itself
+
+sudo bowtie2 -p 4 -x Vicilus \
+-1 /home/kirill/bi/assembly/spades/first_run/trimmed/reads_1.trimmed.fastq \
+-2 /home/kirill/bi/assembly/spades/first_run/trimmed/reads_2.trimmed.fastq -S /home/kirill/bi/assembly/spades/first_run/mapping/reference_mapping/Vicilus.sam
+
+-------------------------------------------------
+конвертация sam в bam
+
+
+sudo samtools view -b -S Vicilus.sam > Vicilus.bam
+
+сортировка bam 
+
+sudo samtools sort  -@ 4 -o sortedVicilus.bam Vicilus.bam
+
+индексирование
+
+sudo samtools index sortedVicilus.bam
+
+

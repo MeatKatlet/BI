@@ -1,5 +1,4 @@
-simplyfy task of alinning? just fo proof of concept - 1 contig
-
+simplyfy task of alinning, just fo proof of concept - 1 contig
 
 
 1. Align scaffolds/contigs on reference. Nucmer because it suitable for align large sequences on reference. May be other tools can be usefull.
@@ -35,13 +34,15 @@ sudo samtools fasta \
 
 
 5. Index contigs for futher alingment reads on them
-надо делать cd в папку куда запись идет !!!!
+need to do cd in the write directory!
 
 sudo python3 bowtie2-build /home/kirill/bi/assembly/spades/first_run/mapping/reference_1_contig_reads_mapping/sorted_aligned_contigs.fasta VB
 
 6. Map reads on contigs
 
-sudo bowtie2 -p 4 -x VB -1 /home/kirill/bi/assembly/spades/first_run/trimmed/reads_1.trimmed.fastq -2 /home/kirill/bi/assembly/spades/first_run/trimmed/reads_2.trimmed.fastq \
+sudo bowtie2 -p 4 -x VB \
+-1 /home/kirill/bi/assembly/spades/first_run/trimmed/reads_1.trimmed.fastq \
+-2 /home/kirill/bi/assembly/spades/first_run/trimmed/reads_2.trimmed.fastq \
 -S /home/kirill/bi/assembly/spades/first_run/mapping/reference_1_contig_reads_mapping/reads_on_contigs_alignment.sam
 
 
@@ -54,7 +55,7 @@ sudo bedtools bamtobed \
 
 8. Get FASTA from reference under alingments
 
-reference is multifasta is this ok?, 2 chroms in it, yes it should be so i think
+
 
 sudo bedtools getfasta -fullHeader -fi \
 /home/kirill/bi/assembly/spades/first_run/sequence.fasta \
@@ -62,44 +63,43 @@ sudo bedtools getfasta -fullHeader -fi \
 -fo /home/kirill/bi/assembly/spades/first_run/mapping/reference_1_contig_reads_mapping/reference_under_aligned_contigs.fasta
 
 
-9. Align subsequences of reference under aligned contigs on contigs again for compare and coordinate equality. может не сработать, из за длины, может потребуется Nucmer
-TODO посмотреть команду для выравнивания одного файла!
+9. Align subsequences of reference under aligned contigs on contigs again for compare and coordinate equality. Nucmer
 
-#!!!!!!!!!!!!!!!!!!sudo /usr/local/bin/bowtie2/bowtie2 -p 4 -x VB /home/kirill/bi/assembly/spades/first_run/mapping/reference_contig_reads_mapping/reference_under_aligned_contigs.fasta \
-#!!!!!!!!!!!!!!!!!!-S /home/kirill/bi/assembly/spades/first_run/mapping/reference_contig_reads_mapping/reference_under_contigs_alignment.sam
 
-sudo /usr/local/bin/quast-4.6.3/quast_libs/MUMmer/bin/nucmer -c 65 -l 65 \
+sudo nucmer -c 65 -l 65 \
 --maxmatch --sam-long=/home/kirill/bi/assembly/spades/first_run/mapping/reference_1_contig_reads_mapping/reference_under_contigs_alignment.sam \
 /home/kirill/bi/assembly/spades/first_run/mapping/reference_1_contig_reads_mapping/sorted_aligned_contigs.fasta \
 /home/kirill/bi/assembly/spades/first_run/mapping/reference_1_contig_reads_mapping/reference_under_aligned_contigs.fasta
 
 10. Merge SAM files
 
-не сливает файлы ! может надо отсортировать, или использовать другие команды или bam файлы
-
 tab symbols must be in SQ headers, otherwise it causes error!!!!
 
     10.1 sam - bam
 
-    sudo /usr/local/bin/samtools-1.7/samtools view -@ 4 -h -b -S \
-    /home/kirill/bi/assembly/spades/first_run/mapping/reference_1_contig_reads_mapping/reference_under_contigs_alignment.sam > /home/kirill/bi/assembly/spades/first_run/mapping/reference_1_contig_reads_mapping/reference_under_contigs_alignment.bam
+    sudo samtools view -@ 4 -h -b -S \
+    /home/kirill/bi/assembly/spades/first_run/mapping/reference_1_contig_reads_mapping/reference_under_contigs_alignment.sam > \
+    /home/kirill/bi/assembly/spades/first_run/mapping/reference_1_contig_reads_mapping/reference_under_contigs_alignment.bam
     
 
-    sudo /usr/local/bin/samtools-1.7/samtools view -@ 4 -h -b -S \
-    /home/kirill/bi/assembly/spades/first_run/mapping/reference_1_contig_reads_mapping/reads_on_contigs_alignment.sam > /home/kirill/bi/assembly/spades/first_run/mapping/reference_1_contig_reads_mapping/reads_on_contigs_alignment.bam
+    sudo samtools view -@ 4 -h -b -S \
+    /home/kirill/bi/assembly/spades/first_run/mapping/reference_1_contig_reads_mapping/reads_on_contigs_alignment.sam > \
+    /home/kirill/bi/assembly/spades/first_run/mapping/reference_1_contig_reads_mapping/reads_on_contigs_alignment.bam
 
 
     10.2 sort input bam
 
-    sudo /usr/local/bin/samtools-1.7/samtools sort -@ 4 \
-    -o /home/kirill/bi/assembly/spades/first_run/mapping/reference_1_contig_reads_mapping/sorted_reference_under_contigs_alignment.bam /home/kirill/bi/assembly/spades/first_run/mapping/reference_1_contig_reads_mapping/reference_under_contigs_alignment.bam
+    sudo samtools sort -@ 4 \
+    -o /home/kirill/bi/assembly/spades/first_run/mapping/reference_1_contig_reads_mapping/sorted_reference_under_contigs_alignment.bam \
+    /home/kirill/bi/assembly/spades/first_run/mapping/reference_1_contig_reads_mapping/reference_under_contigs_alignment.bam
     
     
-    sudo /usr/local/bin/samtools-1.7/samtools sort -@ 4 \
-    -o /home/kirill/bi/assembly/spades/first_run/mapping/reference_1_contig_reads_mapping/sorted_reads_on_contigs_alignment.bam /home/kirill/bi/assembly/spades/first_run/mapping/reference_1_contig_reads_mapping/reads_on_contigs_alignment.bam
+    sudo samtools sort -@ 4 \
+    -o /home/kirill/bi/assembly/spades/first_run/mapping/reference_1_contig_reads_mapping/sorted_reads_on_contigs_alignment.bam \
+    /home/kirill/bi/assembly/spades/first_run/mapping/reference_1_contig_reads_mapping/reads_on_contigs_alignment.bam
 
 
-sudo /usr/local/bin/samtools-1.7/samtools merge -@ 4 \
+sudo samtools merge -@ 4 \
 /home/kirill/bi/assembly/spades/first_run/mapping/reference_1_contig_reads_mapping/merged.bam \
 /home/kirill/bi/assembly/spades/first_run/mapping/reference_1_contig_reads_mapping/sorted_reference_under_contigs_alignment.bam \
 /home/kirill/bi/assembly/spades/first_run/mapping/reference_1_contig_reads_mapping/sorted_reads_on_contigs_alignment.bam
@@ -107,28 +107,29 @@ sudo /usr/local/bin/samtools-1.7/samtools merge -@ 4 \
 
 checking headers only for merged file
 
-sudo /usr/local/bin/samtools-1.7/samtools view -H /home/kirill/bi/assembly/spades/first_run/mapping/reference_1_contig_reads_mapping/merged.bam
+sudo samtools view -H /home/kirill/bi/assembly/spades/first_run/mapping/reference_1_contig_reads_mapping/merged.bam
 
 
 11. Sort merged file again, myy be this is not neccesary (in this experiment sorted and unsorted files are equal)
 
 
-sudo /usr/local/bin/samtools-1.7/samtools sort -@ 4 \
--o /home/kirill/bi/assembly/spades/first_run/mapping/reference_1_contig_reads_mapping/sorted_merged.bam /home/kirill/bi/assembly/spades/first_run/mapping/reference_1_contig_reads_mapping/merged.bam
+sudo samtools sort -@ 4 \
+-o /home/kirill/bi/assembly/spades/first_run/mapping/reference_1_contig_reads_mapping/sorted_merged.bam \
+/home/kirill/bi/assembly/spades/first_run/mapping/reference_1_contig_reads_mapping/merged.bam
 
 
 12. Index 
 
-sudo /usr/local/bin/samtools-1.7/samtools index -@ 4 /home/kirill/bi/assembly/spades/first_run/mapping/reference_1_contig_reads_mapping/sorted_merged.bam
+sudo samtools index -@ 4 /home/kirill/bi/assembly/spades/first_run/mapping/reference_1_contig_reads_mapping/sorted_merged.bam
 
 
 13. Make overlapping annotation. Contig vs annotation from whole reference
 
 this output in gff
 yes it output both partially overlapping fnd full overlapping intervals. overlapping with mapped contig(tested only on left border) 
-TODO need to add headers!! in gff
+need to add headers!! in gff
 
-TODO how to extract contigs names from sorted_aligned_contigs.bam and print them in awk?
+extract contigs names from sorted_aligned_contigs.bam and print them in awk
 
 names of sequences in resulting gff and in fasta file(reference) must be equal, otherwise it causes error!!!
 
@@ -141,7 +142,7 @@ echo -e "##gff-version 3\n\
 ##species https://www.ncbi.nlm.nih.gov/Taxonomy/Browser/wwwtax.cgi?id=243277" > annotation.gff
 
 
-sudo /usr/local/bin/bedtools2/bin/bedtools intersect \
+sudo bedtools intersect \
 -a /home/kirill/bi/assembly/spades/first_run/GCF_000006745.1_ASM674v1_genomic.gff \
 -b /home/kirill/bi/assembly/spades/first_run/mapping/reference_1_contig_reads_mapping/sorted_aligned_contigs.bam | \
 awk '{
@@ -149,8 +150,8 @@ awk '{
         printf "NODE_1_length_536343_cov_19.062\t"
         printf "%s\t", $2
         printf "%s\t", $3
-        printf "%s\t", $4-973291 #вычесть нужную величину, нужно чтобы не было 0 координат!!!???
-        printf "%s\t", $5-973291 #вычесть нужную величину
+        printf "%s\t", $4-973291 #substract certain value
+        printf "%s\t", $5-973291
         printf "%s\t", $6
         printf "%s\t", $7
         printf "%s\t", $8
@@ -163,14 +164,12 @@ awk '{
 
 echo -e "##\n" >> annotation.gff
 
-TODO coords must be from 0
-
 
 
 
 this output in bam
 
-sudo /usr/local/bin/bedtools2/bin/bedtools intersect \
+sudo bedtools intersect \
 -a /home/kirill/bi/assembly/spades/first_run/mapping/reference_1_contig_reads_mapping/sorted_aligned_contigs.bam \
 -b /home/kirill/bi/assembly/spades/first_run/GCF_000006745.1_ASM674v1_genomic.gff > test.bam
 
@@ -181,14 +180,4 @@ sudo /usr/local/bin/bedtools2/bin/bedtools intersect \
 Reference will be  sorted_aligned_contigs.fasta(5) + annotation.gff(cutted annotation)
 
 sorted_merged.bam и его индексы (13) открываем в IGV
-
-
-
-
-    
-
-
-
-
-
 

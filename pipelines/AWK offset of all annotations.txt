@@ -1,0 +1,32 @@
+#extract annotation intervals under contig(s)
+
+echo -e "##gff-version 3\n\
+#!gff-spec-version 1.21\n\
+#!processor NCBI annotwriter\n\
+#!genome-build ASM674v1\n\
+#!genome-build-accession NCBI_Assembly:GCF_000006745.1\n\
+##sequence-region NODE_1_length_536343_cov_19.062 1 536336\n\
+##species https://www.ncbi.nlm.nih.gov/Taxonomy/Browser/wwwtax.cgi?id=243277" > annotation.gff
+
+
+sudo bedtools intersect \
+-a /home/kirill/bi/assembly/spades/first_run/GCF_000006745.1_ASM674v1_genomic.gff \
+-b /home/kirill/bi/assembly/spades/first_run/mapping/reference_1_contig_reads_mapping/sorted_aligned_contigs.bam | \
+awk '{
+    
+        printf "NODE_1_length_536343_cov_19.062\t"
+        printf "%s\t", $2
+        printf "%s\t", $3
+        printf "%s\t", $4-973291 #вычесть нужную величину
+        printf "%s\t", $5-973291 #вычесть нужную величину
+        printf "%s\t", $6
+        printf "%s\t", $7
+        printf "%s\t", $8
+        printf "%s\n", $9
+
+        
+    
+
+}' >> annotation.gff
+
+echo -e "##\n" >> annotation.gff

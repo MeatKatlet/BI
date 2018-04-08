@@ -1,0 +1,197 @@
+Mapping ERX006574 and ERX006580
+
+Downloading from sra should be done like this!(separate pair reads)
+sudo fastq-dump --split-files ERR016362 -O /home/kirill/bi/mapping/
+sudo fastq-dump --split-files ERR016365 -O /home/kirill/bi/mapping/
+
+1. Quolity control
+
+Fasqc - visual check for right and left reads
+what adapters used?
+
+2. trim adapters. and bad bases надо делать равномерно чтобы было видно дубликаты!(9)
+
+
+java -jar "c:\Program Files\Trimmomatic\trimmomatic-0.36.jar" PE -threads 4 -phred33 \
+"c:\Users\webprog\Documents\bi\Задачи\Mapping\ERR016365_1.fastq" \
+"c:\Users\webprog\Documents\bi\Задачи\Mapping\ERR016365_2.fastq" \
+"c:\Users\webprog\Documents\bi\Задачи\Mapping\trimmed\p1.fastq" \
+"c:\Users\webprog\Documents\bi\Задачи\Mapping\trimmed\u1.fastq" \
+"c:\Users\webprog\Documents\bi\Задачи\Mapping\trimmed\p2.fastq" \
+"c:\Users\webprog\Documents\bi\Задачи\Mapping\trimmed\u2.fastq" \
+SLIDINGWINDOW:4:20 MINLEN:30
+
+java -jar "c:\Program Files\Trimmomatic\trimmomatic-0.36.jar" PE -threads 4 -phred33 \
+"c:\Users\webprog\Documents\bi\Задачи\Mapping\ERR016365_1.fastq" \
+"c:\Users\webprog\Documents\bi\Задачи\Mapping\ERR016365_2.fastq" \
+"c:\Users\webprog\Documents\bi\Задачи\Mapping\trimmed_begin_end\p1.fastq" \
+"c:\Users\webprog\Documents\bi\Задачи\Mapping\trimmed_begin_end\u1.fastq" \
+"c:\Users\webprog\Documents\bi\Задачи\Mapping\trimmed_begin_end\p2.fastq" \
+"c:\Users\webprog\Documents\bi\Задачи\Mapping\trimmed_begin_end\u2.fastq" \
+HEADCROP:9 CROP:68
+
+
+3. QC 
+bias on 3`
+
+
+
+4. Index of reference
+
+cd on write directory
+
+sudo /usr/bin/python3 bowtie2-build /home/kirill/bi/mapping/8_crom_reference.fasta HC #8 crom
+sudo /usr/bin/python3 bowtie2-build /home/kirill/bi/mapping/hg19.fasta HC2 # total
+
+
+
+5. Map reads on reference
+
+sudo bowtie2 -p 4 -x HC -1 /home/kirill/bi/mapping/trimmed_reads/p1.fastq -2 /home/kirill/bi/mapping/trimmed_reads/p2.fastq \
+-S /home/kirill/bi/mapping/reads_on_reference_alignment.sam
+
+sudo bowtie2 -p 4 -x HC2 -1 /home/kirill/bi/mapping/trimmed_reads/p1.fastq -2 /home/kirill/bi/mapping/trimmed_reads/p2.fastq \
+-S /home/kirill/bi/mapping/reads_on_reference_alignment2.sam
+
+
+    5.1 sam -> bam
+sudo samtools view -@ 4 -h -b -S \
+/home/kirill/bi/mapping/reads_on_reference_alignment2.sam > /home/kirill/bi/mapping/reads_on_reference_alignment2.bam
+
+    5.2 sort bam
+sudo samtools sort -@ 4 \
+-o /home/kirill/bi/mapping/sorted_reads_on_reference_alignment2.bam \
+/home/kirill/bi/mapping/reads_on_reference_alignment2.bam
+    
+    5.3 index bam
+sudo samtools index -@ 4 /home/kirill/bi/mapping/sorted_reads_on_reference_alignment2.bam
+
+    5.4 only 8 crome
+sudo samtools view -h -b sorted_reads_on_reference_alignment2.bam chr8 > sorted_reads_on_reference_alignment2.chr8.bam
+
+
+    5.5. sort chr8
+    
+    - to IGV!
+    
+sudo samtools sort -@ 4 \
+-o /home/kirill/bi/mapping/sorted_sorted_reads_on_reference_alignment2.chr8.bam \
+/home/kirill/bi/mapping/sorted_reads_on_reference_alignment2.chr8.bam
+    
+    
+    5.6. index chr8
+    
+    - to IGV!
+    
+sudo samtools index -@ 4 /home/kirill/bi/mapping/sorted_sorted_reads_on_reference_alignment2.chr8.bam
+
+
+
++++++++++++++++++++++++++++++++
+IGV
+    
+
+
+
+6. Stats of unique mapped reads, stats of overlapping pairs, error-rate function of read position
+
+    6.1 statistic on sam/bam file for unique mapping (primary mapping)
+    
+    it may be reads with good mapping on different places
+    bowtie2 adds its own custom tags ! 
+    it is quite enough to just good mapping quolity? because of the repeats one read can be mapped on different places
+    
+    
+sudo samtools view -F 0x900 /home/kirill/bi/mapping/sam_stats_test.sam
+    
+
+    6.2 and overlapping of pairs
+    
+        picard tools draw statistics on pairs
+  ------------------------------      
+java -jar /usr/local/bin/picard/picard.jar CollectAlignmentSummaryMetrics \
+R=/home/kirill/bi/mapping/reference.fasta \
+I=/home/kirill/bi/mapping/sorted_reads_on_reference_alignment.bam \
+O=/home/kirill/bi/mapping/CollectAlignmentSummaryMetrics.txt
+
+
+java -jar /usr/local/bin/picard/picard.jar CollectInsertSizeMetrics \
+I=/home/kirill/bi/mapping/sorted_reads_on_reference_alignment.bam \
+O=/home/kirill/bi/mapping/CollectInsertSizeMetrics.txt \
+H=/home/kirill/bi/mapping/CollectInsertSizeMetrics_histogram.pdf \
+M=0.5
+
+
+java -jar /usr/local/bin/picard/picard.jar CollectWgsMetrics \
+I=/home/kirill/bi/mapping/sorted_reads_on_reference_alignment.bam \
+O=/home/kirill/bi/mapping/CollectWgsMetrics.txt \
+R=/home/kirill/bi/mapping/reference.fasta 
+   ----------------------------------------    
+       
+    
+        YT:Z:CP - concordant map pair for bowtie2
+        
+        samtools view aligned_reads.bam | grep  "YT:Z:CP"
+        
+        
+        how i must merge overlapping reads?
+        
+        
+        based on statistical insert size, or base on each individual insert size
+        
+        => individual must be more presize
+        
+        tool foor individual merge that take into account individual insert size, mismatches,indels?
+        
+        for simplification of task i must merge equal reads/ even with indels, but with no mismathes, baecause it may provide additional info about SV
+        
+        
+        ------------------------------------
+        a. extract overlapping reads from sam file, write them in fastq 1/2 reads
+        
+        samtools view aligned_reads.bam | grep  "YT:Z:CP" -> stdin into 
+        
+        9 field + cigar strings of each read
+        pysam
+        memory management!
+        
+        
+        
+        b. input them in PEAR/FLASH for example or other tool. not all of them can be merged be merged
+
+
+
+
+
+7. Cut only interest region for realingment?
+
+bedtools intersect
+
+8. deduplicate mapping reads
+
+java -jar /usr/local/bin/picard/picard.jar ....
+
+9. SNP tools
+
+индексировать референс!
+
+sudo samtools faidx /home/kirill/bi/mapping/hg19.fasta
+
+sudo samtools mpileup -B -r chr8 -uf /home/kirill/bi/mapping/hg19.fasta /home/kirill/bi/mapping/sorted_raw.bam | /usr/local/bin/bcftools-1.6/bcftools view -v snps > out.vcf
+
+
+
+10. Quolity control of SNP
+
+sudo bcftools stats out.vcf > stats.txt
+
+sudo /usr/local/bin/bcftools-1.6/misc/plot-vcfstats -p samtools_plot stats.txt
+
+understand of statistics of output
+
+11. Effect of SNP
+
+dpSnp
+
+SnpEff
+Annovar and alternatives

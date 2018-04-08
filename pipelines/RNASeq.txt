@@ -1,0 +1,234 @@
+
+Downloading from sra should be done like this!(separate pair reads)
+sudo /usr/local/bin/sratoolkit.2.9.0-ubuntu64/bin/fastq-dump --split-files SRR3191542 -O /home/kirill/bi/transcript/Mock1-1
+sudo /usr/local/bin/sratoolkit.2.9.0-ubuntu64/bin/fastq-dump SRR3194428 -O /home/kirill/bi/transcript/Mock1-2
+sudo /usr/local/bin/sratoolkit.2.9.0-ubuntu64/bin/fastq-dump --split-files SRR3191543 -O /home/kirill/bi/transcript/Mock2-1
+sudo /usr/local/bin/sratoolkit.2.9.0-ubuntu64/bin/fastq-dump SRR3194429 -O /home/kirill/bi/transcript/Mock2-2 -
+sudo /usr/local/bin/sratoolkit.2.9.0-ubuntu64/bin/fastq-dump --split-files SRR3191544 -O /home/kirill/bi/transcript/ZIKV1-1
+sudo /usr/local/bin/sratoolkit.2.9.0-ubuntu64/bin/fastq-dump SRR3194430 -O /home/kirill/bi/transcript/ZIKV1-2 -
+sudo /usr/local/bin/sratoolkit.2.9.0-ubuntu64/bin/fastq-dump --split-files SRR3191545 -O /home/kirill/bi/transcript/ZIKV2-1
+sudo /usr/local/bin/sratoolkit.2.9.0-ubuntu64/bin/fastq-dump SRR3194431 -O /home/kirill/bi/transcript/ZIKV2-2 -
+
+
+//////////QC///////////////
+
+FASTQC
+
+
+////////map/////////////////////////////////////////////////////////////////////////////
+
+///mock1-1/////////// remove --GTF option on subsequent runs 
+sudo tophat2 -o /home/kirill/bi/transcript/Mock1-1 \
+--read-mismatches 4 \
+--read-realign-edit-dist 0 \
+--read-gap-length 0 \
+--read-edit-dist 4 \
+--num-threads 4 \
+--transcriptome-index /home/kirill/bi/transcript/zik \
+--no-discordant \
+--no-mixed \
+--no-novel-juncs \
+--max-multihits 2 \
+/home/kirill/bi/mapping/HC2 \
+/home/kirill/bi/transcript/Mock1-1/SRR3191542_1.fastq /home/kirill/bi/transcript/Mock1-1/SRR3191542_2.fastq
+
+
+//index bam output for igv
+
+samtools index -@ 4 /home/kirill/bi/transcript/Mock1-1/accepted_hits.bam
+
+
+///mock2-1///////////
+
+sudo tophat2 -o /home/kirill/bi/transcript/Mock2-1 \
+--read-mismatches 4 \
+--read-realign-edit-dist 0 \
+--read-gap-length 0 \
+--read-edit-dist 4 \
+--num-threads 4 \
+--GTF /home/kirill/bi/mapping/HC2.gff3 \
+--transcriptome-index /home/kirill/bi/transcript/zik \
+--no-discordant \
+--no-mixed \
+--no-novel-juncs \
+--max-multihits 2 \
+/home/kirill/bi/mapping/HC2 \
+/home/kirill/bi/transcript/Mock2-1/SRR3191543_1.fastq /home/kirill/bi/transcript/Mock2-1/SRR3191543_2.fastq
+
+
+/////zikv1/////////////////////////////////////////////
+sudo tophat2 -o /home/kirill/bi/transcript/ZIKV1-1 \
+--read-mismatches 4 \
+--read-realign-edit-dist 0 \
+--read-gap-length 0 \
+--read-edit-dist 4 \
+--num-threads 4 \
+--transcriptome-index /home/kirill/bi/transcript/zik \
+--no-discordant \
+--no-mixed \
+--no-novel-juncs \
+--max-multihits 2 \
+/home/kirill/bi/mapping/HC2 \
+/home/kirill/bi/transcript/ZIKV1-1/SRR3191544_1.fastq /home/kirill/bi/transcript/ZIKV1-1/SRR3191544_2.fastq
+
+
+
+/////zikv2/////////////////////////////////////////////
+sudo tophat2 -o /home/kirill/bi/transcript/ZIKV2-1 \
+--read-mismatches 4 \
+--read-realign-edit-dist 0 \
+--read-gap-length 0 \
+--read-edit-dist 4 \
+--num-threads 4 \
+--transcriptome-index /home/kirill/bi/transcript/zik \
+--no-discordant \
+--no-mixed \
+--no-novel-juncs \
+--max-multihits 2 \
+/home/kirill/bi/mapping/HC2 \
+/home/kirill/bi/transcript/ZIKV2-1/SRR3191545_1.fastq /home/kirill/bi/transcript/ZIKV2-1/SRR3191545_2.fastq
+
+
+//////////////////////END MAPPING/////////////////////////////////////////////////////
+
+--------------------------------------------------------------------------------
+//////////////////assembly/////////////////////////////////
+
+cufflinks --output-dir /home/kirill/bi/transcript/Mock1-1/assembly \
+--num-threads 4 \
+/home/kirill/bi/transcript/Mock1-1/accepted_hits.bam \
+–GTF-guide /home/kirill/bi/mapping/HC2.gff3 \
+–frag-bias-correct /home/kirill/bi/mapping/HC2.fa \
+–multi-read-correct \
+--library-norm-method classic-fpkm \
+–upper-quartile-norm \
+–compatible-hits-norm \
+–no-effective-length-correction \
+
+4 Раза
+
+
+
+////////////////////////////////////////////////////////////
+
+cuffmerge -o /home/kirill/bi/transcript/merged \
+--ref-gtf /home/kirill/bi/mapping/HC2.gff3 \
+--ref-sequence /home/kirill/bi/mapping/HC2.fa \
+--num-threads 4 \
+/home/kirill/bi/transcript/all_assemblies.txt
+
+
+///////////////////////////////////////////////////////////
+
+delete from merged.gtf . strands!! -> merged.m.gtf
+
+//////////////////////////////////////////////////////
+-----------------------------------------------------------------------------------
+
+count reads mapped on diapasons in annotation
+
+samtools view -@ 4 -F 2304 /home/kirill/bi/transcript/Mock1-1/accepted_hits.bam | samtools view -@ 4 -f 3 -o /home/kirill/bi/transcript/Mock1-1/accepted_hits_primary_proper.sam
+
+
+
+
+
+samtools view -@ 4 -h -o /home/kirill/bi/transcript/Mock1-1/accepted_hits.sam /home/kirill/bi/transcript/Mock1-1/accepted_hits.bam \
+samtools view -@ 4 -h -o /home/kirill/bi/transcript/Mock2-1/accepted_hits.sam /home/kirill/bi/transcript/Mock2-1/accepted_hits.bam \
+samtools view -@ 4 -h -o /home/kirill/bi/transcript/ZIKV1-1/accepted_hits.sam /home/kirill/bi/transcript/ZIKV1-1/accepted_hits.bam \
+samtools view -@ 4 -h -o /home/kirill/bi/transcript/ZIKV2-1/accepted_hits.sam /home/kirill/bi/transcript/ZIKV2-1/accepted_hits.bam
+
+
+python2.7 -m HTSeq.scripts.count --stranded=no -m intersection-nonempty --order=pos /home/kirill/bi/transcript/Mock1-1/accepted_hits.sam /home/kirill/bi/mapping/HC2.gff3 > /home/kirill/bi/transcript/Mock1-1/coverage.txt \
+
+
+
+python2.7 -m HTSeq.scripts.count --stranded=no -m intersection-nonempty --order=pos /home/kirill/bi/transcript/Mock2-1/accepted_hits.sam /home/kirill/bi/mapping/HC2.gff3 > /home/kirill/bi/transcript/Mock2-1/coverage.txt \
+
+
+
+python2.7 -m HTSeq.scripts.count --stranded=no -m intersection-nonempty --order=pos /home/kirill/bi/transcript/ZIKV1-1/accepted_hits.sam /home/kirill/bi/mapping/HC2.gff3 > /home/kirill/bi/transcript/ZIKV1-1/coverage.txt \
+
+Only proper primary alignment!
+
+samtools view -@ 4 -F 2304 -h /home/kirill/bi/transcript/Mock1-1/accepted_hits.bam | samtools view -@ 4 -h -f 3 | samtools sort -@ 4 -o /home/kirill/bi/transcript/Mock1-1/sorted_primary_proper.bam
+samtools view -@ 4 -F 2304 -h /home/kirill/bi/transcript/Mock2-1/accepted_hits.bam | samtools view -@ 4 -h -f 3 | samtools sort -@ 4 -o /home/kirill/bi/transcript/Mock2-1/sorted_primary_proper.bam
+samtools view -@ 4 -F 2304 -h /home/kirill/bi/transcript/ZIKV1-1/accepted_hits.bam | samtools view -@ 4 -h -f 3 | samtools sort -@ 4 -o /home/kirill/bi/transcript/ZIKV1-1/sorted_primary_proper.bam
+samtools view -@ 4 -F 2304 -h /home/kirill/bi/transcript/ZIKV2-1/accepted_hits.bam | samtools view -@ 4 -h -f 3 | samtools sort -@ 4 -o /home/kirill/bi/transcript/ZIKV2-1/sorted_primary_proper.bam
+
+
+samtools view -h /home/kirill/bi/transcript/Mock1-1/sorted_primary_proper.bam > /home/kirill/bi/transcript/Mock1-1/sorted_primary_proper.sam
+samtools view -h /home/kirill/bi/transcript/Mock2-1/sorted_primary_proper.bam > /home/kirill/bi/transcript/Mock2-1/sorted_primary_proper.sam
+samtools view -h /home/kirill/bi/transcript/ZIKV1-1/sorted_primary_proper.bam > /home/kirill/bi/transcript/ZIKV1-1/sorted_primary_proper.sam
+samtools view -h /home/kirill/bi/transcript/ZIKV2-1/sorted_primary_proper.bam > /home/kirill/bi/transcript/ZIKV2-1/sorted_primary_proper.sam
+
+
+python2.7 -m HTSeq.scripts.count --stranded=no -m intersection-nonempty --order=pos /home/kirill/bi/transcript/Mock1-1/sorted_primary_proper.sam /home/kirill/bi/mapping/HC2.gff3 > /home/kirill/bi/transcript/Mock1-1/coverage.txt
+python2.7 -m HTSeq.scripts.count --stranded=no -m intersection-nonempty --order=pos /home/kirill/bi/transcript/Mock2-1/sorted_primary_proper.sam /home/kirill/bi/mapping/HC2.gff3 > /home/kirill/bi/transcript/Mock2-1/coverage.txt
+python2.7 -m HTSeq.scripts.count --stranded=no -m intersection-nonempty --order=pos /home/kirill/bi/transcript/ZIKV1-1/sorted_primary_proper.sam /home/kirill/bi/mapping/HC2.gff3 > /home/kirill/bi/transcript/ZIKV1-1/coverage.txt
+python2.7 -m HTSeq.scripts.count --stranded=no -m intersection-nonempty --order=pos /home/kirill/bi/transcript/ZIKV2-1/sorted_primary_proper.sam /home/kirill/bi/mapping/HC2.gff3 > /home/kirill/bi/transcript/ZIKV2-1/coverage.txt
+
+
+
+
+
+/////////QC////////////////
+Quolity control of mapping of reads in geans ends, if coverage in the and of geans is high? then, sample may have high fragmentation(QC if RIN is absent)
+
+intersection-strict! for coverage plot!
+
+
+TODO may be log transformation of coverage
+
+
+python2.7 /home/kirill/bi/BI/htseq_processing/plot_coverage.py \
+--stranded=no -f bam -m intersection-strict --order=pos \
+/home/kirill/bi/transcript/Mock1-1/sorted_primary_proper.bam \
+/home/kirill/bi/transcript/Mock2-1/sorted_primary_proper.bam \
+/home/kirill/bi/transcript/ZIKV1-1/sorted_primary_proper.bam \
+/home/kirill/bi/transcript/ZIKV2-1/sorted_primary_proper.bam \
+/home/kirill/bi/mapping/HC2.gff3
+
+///////////////////
+
+
+////////self consistency plots//////////
+TODO self consistency plots, Spirman,Pirson correlation coefficient (measure of similarity between 2 samples - control1/control2 desiese1/desiese2 control1/desiese1 ...) - 
+ один из них только для нормальных данных, логарифмирование приближает данные к нормальному распределению...
+TODO plot heatmap попарный коэффициент корреляции м/у всеми обрразцами, матрица все со всеми образцами сравненными между собой
+
+TODO pca
+
+TODO MDA
+
+////////////////////////////////////////
+
+Fisher, and others methods
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
