@@ -1,7 +1,8 @@
 # BI
 
 \htseq_processing\plot_coverage.py - plot normalized coverage of genes, write raw absolute coverage 
-data to file
+data to file. It uses binary search to find intersection of reads on 10-percent interval control points. 
+10 percent points of genes length. 
 
 example of command run, arguments is the same as in HTseq-count, in this example we handle 4 bam files
 
