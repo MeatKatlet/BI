@@ -1,0 +1,12 @@
+import matplotlib.pyplot as plt
+import numpy as np
+
+x = np.arange(10)
+
+plt.plot(x, x)
+plt.plot(x, 2 * x)
+plt.plot(x, 3 * x)
+plt.plot(x, 4 * x)
+plt.title("111111")
+plt.grid(True)
+plt.show()
